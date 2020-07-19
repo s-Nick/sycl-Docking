@@ -6,7 +6,7 @@
 struct atom_st
 {
     unsigned int id;
-    float3 position;
+    double3 position;
 };
 
 #endif

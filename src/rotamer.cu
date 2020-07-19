@@ -12,8 +12,8 @@ Rotamer::Rotamer(const RDKit::Bond b,
     vector = ComputeVector(beginAtom,endAtom);
 }
 
-float3 Rotamer::ComputeVector(atom_st &startingAtom, atom_st &endAtom){
-    float3 vector;
+double3 Rotamer::ComputeVector(atom_st &startingAtom, atom_st &endAtom){
+    double3 vector;
     vector.x = endAtom.position.x - startingAtom.position.x;
     vector.y = endAtom.position.y - startingAtom.position.y;
     vector.z = endAtom.position.z - startingAtom.position.z;
@@ -30,6 +30,6 @@ atom_st Rotamer::getBeginAtom(){
 atom_st Rotamer::getEndingAtom(){
     return endAtom;
 }
-float3 Rotamer::getVector(){
+double3 Rotamer::getVector(){
     return vector;
 }

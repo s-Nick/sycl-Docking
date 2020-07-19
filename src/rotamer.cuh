@@ -11,6 +11,9 @@
 class Rotamer{
 
 public:
+    
+    Rotamer()=default;
+    
     Rotamer(const RDKit::Bond b,
             unsigned int id,
             atom_st &beginAtom,
@@ -20,17 +23,17 @@ public:
 
     atom_st getBeginAtom();
     atom_st getEndingAtom();
-    float3 getVector();
+    double3 getVector();
 
 private:
     RDKit::Bond bond;
     atom_st beginAtom;
     atom_st endAtom;
     unsigned int idx;
-    float3 vector;
+    double3 vector;
     //Quaternion quaternion;
 
-    float3 ComputeVector(atom_st &startingAtom, atom_st &endAtom);
+    double3 ComputeVector(atom_st &startingAtom, atom_st &endAtom);
     
 };
 #endif //ROTAMER_H_
