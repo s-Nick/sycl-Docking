@@ -5,6 +5,6 @@ LDFLAGS	= -lRDKitChemReactions -lRDKitFileParsers -lRDKitSmilesParse -lRDKitDepi
 SRCDIR	= src
 CUDA_ARCH = 50
 ARCH = -gencode arch=compute_${CUDA_ARCH},code=compute_${CUDA_ARCH}
-CUDAFLAGS = -lcudadevrt -lcublas -lcublas_static -rdc=true -use_fast_math
+CUDAFLAGS = -lcudadevrt -lcublas -lcublas_static -rdc=true #-use_fast_math
 all:
 	$(CC) -g  ${ARCH}  $(SRCDIR)/*.cu $(SRCDIR)/*.cpp  -o main $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS)
