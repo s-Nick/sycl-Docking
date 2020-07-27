@@ -3,11 +3,13 @@
 #include <iostream>
 #include <algorithm>
 
+/**
+ * Initialize the graph with an empty adjacency matrix
+ **/
 Graph::Graph(int num){
     numOfVert = num;
     std::vector<bool> row;
     for(int i = 0; i < numOfVert; i++){
-        
         for(int j = 0; j < numOfVert; j++){
             row.push_back(false);
         }
@@ -16,11 +18,19 @@ Graph::Graph(int num){
     }
 }
 
+
+/**
+ * Add undirected edge to the graph.
+ **/
 void Graph::addEdge(unsigned int startingNode, unsigned int endingNode){
     adj_matrix[startingNode][endingNode]= true;
     adj_matrix[endingNode][startingNode] = true;
 }
 
+
+/**
+ * Remove edge from the graph.
+ **/
 void Graph::removeEdge(unsigned int startingNode, unsigned int endingNode){
     if(adj_matrix[startingNode][endingNode]){
         adj_matrix[startingNode][endingNode] = false;
@@ -28,6 +38,9 @@ void Graph::removeEdge(unsigned int startingNode, unsigned int endingNode){
     }
 }
 
+/**
+ * Useful to print the adjacency matrix of the graph for debugging.
+ **/
 void Graph::to_string(){
     
     for (int i = 0; i < numOfVert; i++) {
@@ -40,14 +53,13 @@ void Graph::to_string(){
     }
 }
 
-/*
-Graph::~Graph(){
-    for(int i = 0; i < numOfVert; i ++){
-        adj_matrix[i].clear();
-    }
-    adj_matrix.clear();
-}*/
-
+/**
+ * Compute the node linked to the starting one using a Depth First Algorithm.
+ * Store the result in a vector passed as argument.
+ * 
+ * @param startingNode
+ * @param linkedNodes The vector containing all the nodes of the path. Store the result.
+ **/
 void Graph::DFSlinkedNode(unsigned int startingNode, std::vector<unsigned int>& linkedNodes){
     linkedNodes.push_back(startingNode);
     auto it = startingNode;

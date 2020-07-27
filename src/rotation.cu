@@ -7,7 +7,7 @@
 #include <iostream>
 #include "math_constants.h"
 
-#define NUM_OF_STREAMS 360
+#define NUM_OF_BLOCKS 360
 
 using namespace std;
 
@@ -19,11 +19,11 @@ inline cudaError_t checkCuda(cudaError_t result, int line)
   return result;
 }
 
-
+/**
+ * Initialize the first row of the rotation matrix as explained in the report
+ */
 __device__ void initFirstRow_v2(double rotation_matrix[3][3], double4 & unit_quat){
-    
-    
-    
+        
     rotation_matrix[0][0] =  1-2*(pow(unit_quat.y,2) + pow(unit_quat.z,2));
     
     rotation_matrix[0][1] = 2*(unit_quat.x*unit_quat.y - unit_quat.z*unit_quat.w);
@@ -36,6 +36,10 @@ __device__ void initFirstRow_v2(double rotation_matrix[3][3], double4 & unit_qua
 
 
 }
+
+/**
+ * Initialize the second row of the rotation matrix as explained in the report
+ */
 
 __device__ void initSecondRow_v2(double rotation_matrix[3][3], double4 & unit_quat){
     
@@ -53,7 +57,9 @@ __device__ void initSecondRow_v2(double rotation_matrix[3][3], double4 & unit_qu
 
 }
 
-
+/**
+ * Initialize the third row of the rotation matrix as explained in the report
+ */
 __device__ void initThirdRow_v2(double rotation_matrix[3][3], double4 & unit_quat){
     
     
@@ -70,26 +76,40 @@ __device__ void initThirdRow_v2(double rotation_matrix[3][3], double4 & unit_qua
 }
 
 
-
+/**
+ * Compute the rotation as a matrix-vector multiplication between the rotation matrix and the vector of the position of the point.
+ * Since the position of the points are a double3 type, it is easier to keep track of it.
+ * The addition of the PassingPoint (pp) is in order to reposition the point in the space after the first transition needed
+ * to compute the right rotation. Each thread address a single atom and the results are stored in block order using the index 
+ * variable.
+ * 
+ * @param res Store the result.
+ * @param atoms all the atom to translate.
+ * @param number_of_atoms number of the atoms to be rotated each time.
+ * @param pp PassingPoint, point belonging to the axis.
+ * @param unit_quaternion Array with all the unit quaternions.
+ * @param angle Angle of the rotation of the first Block
+ **/
 __global__ void rotation_kernel_v5(atom_st* res, atom_st* atoms,
-                                int number_of_atoms, double3 pp, double4* unit_quaternion, int s){
+                                int number_of_atoms, double3 pp, double4* unit_quaternion, int angle){
     
 
-    int tid = threadIdx.x; //+ blockIdx.x*blockDim.x;
-    if(s+blockIdx.x < 360){
-    //printf("unit_q %lf x %lf y %lf z %lf w\n", unit_quaternion[s].x,unit_quaternion[s].y,unit_quaternion[s].z,unit_quaternion[s].w);
+    int tid = threadIdx.x; 
+    if(angle+blockIdx.x < 360){
+    
         __shared__ double rot_matrix[3][3];
     
-        if(tid == 0) initFirstRow_v2(rot_matrix,unit_quaternion[s+blockIdx.x]);
-        else if(tid == 1) initSecondRow_v2(rot_matrix,unit_quaternion[s+blockIdx.x]);
-        else if(tid == 2) initThirdRow_v2(rot_matrix,unit_quaternion[s+blockIdx.x]);
+        if(tid == 0) initFirstRow_v2(rot_matrix,unit_quaternion[angle+blockIdx.x]);
+        else if(tid == 1) initSecondRow_v2(rot_matrix,unit_quaternion[angle+blockIdx.x]);
+        else if(tid == 2) initThirdRow_v2(rot_matrix,unit_quaternion[angle+blockIdx.x]);
 
     
         __syncthreads();
-
+        // The index variable is needed to compute the right position in the result array, in order
+        // not to mix the results between blocks.
         int index = threadIdx.x + blockIdx.x*number_of_atoms;
         if(index < number_of_atoms*(blockIdx.x+1) && number_of_atoms*blockIdx.x <= index){
-            //printf("kernel_v5 %d block %d\n", index,blockIdx.x);
+        
             res[index].id = atoms[tid].id;
 
             res[index].position.x = atoms[tid].position.x * rot_matrix[0][0] + \
@@ -135,7 +155,16 @@ __global__ void back_translation(atom_st* atoms,double3 pp,int number_of_atoms){
 }
 
 
-
+/**
+ * This function is used to set the mememory of the host and the device in order to compute the rotation using the rotation kernel.
+ * At the end of the computation all the rotated positions are brought to the device memory and stored in a vector of vectors for 
+ * future usage.
+ * 
+ * @param angle The angle of the first rotation of the block.
+ * @param atoms_st Vector containing all the atoms to rotate.
+ * @param pp PassingPoint, point belonging to the axis of the rotation, used to compute the rotation.
+ * @param unit_quaternion The vector containing all the computed unit_quaternions, one for each rotation.
+ **/
 vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& atoms_st, double3& pp, double4* unit_quaternion){
 
     int deviceId;
@@ -152,9 +181,9 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
     checkCuda( cudaGetDevice(&deviceId), __LINE__ );
     cudaMallocManaged(&atoms, size_of_atoms);
     
-    checkCuda( cudaMallocHost(&h_res, size_of_atoms*NUM_OF_STREAMS),__LINE__);
+    checkCuda( cudaMallocHost(&h_res, size_of_atoms*NUM_OF_BLOCKS),__LINE__);
     
-    checkCuda( cudaMalloc(&d_res,size_of_atoms*NUM_OF_STREAMS), __LINE__);
+    checkCuda( cudaMalloc(&d_res,size_of_atoms*NUM_OF_BLOCKS), __LINE__);
 
     
     //initialize vector of atoms
@@ -164,17 +193,17 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
         i++;
     }
     
-    cudaMemPrefetchAsync(atoms,size_of_atoms, deviceId);
+    checkCuda( cudaMemPrefetchAsync(atoms,size_of_atoms, deviceId), __LINE__);
     
     double3 passingPoint = pp;
     
     first_translation<<<1,number_of_atoms>>>(atoms,passingPoint, number_of_atoms);
 
-    cudaDeviceSynchronize();
+    checkCuda( cudaDeviceSynchronize(), __LINE__);
     checkCuda( cudaMemPrefetchAsync(unit_quaternion,2*360*sizeof(double4), deviceId) ,__LINE__);
     checkCuda( cudaMemPrefetchAsync(atoms,size_of_atoms,deviceId), __LINE__);
     
-    rotation_kernel_v5<<<NUM_OF_STREAMS,64,0>>>(d_res,atoms,number_of_atoms,passingPoint,unit_quaternion,angle);
+    rotation_kernel_v5<<<NUM_OF_BLOCKS,64,0>>>(d_res,atoms,number_of_atoms,passingPoint,unit_quaternion,angle);
 
     err = cudaGetLastError();
     if(err != cudaSuccess){
@@ -184,14 +213,14 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
 
     checkCuda( cudaDeviceSynchronize(),__LINE__);
     
-    checkCuda( cudaMemcpy(h_res, d_res, size_of_atoms * NUM_OF_STREAMS, cudaMemcpyDeviceToHost), __LINE__ );
+    checkCuda( cudaMemcpy(h_res, d_res, size_of_atoms * NUM_OF_BLOCKS, cudaMemcpyDeviceToHost), __LINE__ );
     
     checkCuda( cudaFree(atoms), __LINE__ );
     
     vector<vector<atom_st>> result_to_return;
-
     vector<atom_st> tmp;
-    for(int i = 0; i < NUM_OF_STREAMS; i++ ){
+    //copy the results in order to free the memory and to pass the result to other functions for further usage
+    for(int i = 0; i < NUM_OF_BLOCKS; i++ ){
         for(int c = atoms_st.size()*i; c < atoms_st.size()*(i+1); c++){
             tmp.push_back(h_res[c]);
         }

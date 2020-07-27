@@ -23,11 +23,16 @@
 
 #include "helper.h"
 
-#define NUM_OF_STREAMS 360
+#define NUM_OF_BLOCKS 360
 
 using namespace RDKit;
 using namespace std;
 
+/**
+ * Struct used to keep track of the max result found.
+ * It keeps track of the distance, the angle and the rotamer. From old version and for future expansions,
+ * it keeps also track of the rotated positions of the first half of the molecule. 
+ **/
 struct max_value{
     double distance;
     int angle;
@@ -35,6 +40,14 @@ struct max_value{
     atom_st* rot_mol_fst_half;
 };
 
+
+/**
+ * Compute the unit quaternion used in the computation of the rotation matrix.
+ * Each thread compute one unit_quaternion.
+ * 
+ * @param res Array with the result.
+ * @param quaternion Array containing the data of the vector, which the atoms must rotate around.
+ **/
 __global__ void compute_unit_quaternions(double4* res, double3 quaternion){
 
     int tid = threadIdx.x;// + blockIdx.x*gridDim.x;
@@ -44,7 +57,7 @@ __global__ void compute_unit_quaternions(double4* res, double3 quaternion){
     double angle;
     double sin_2 , cos_2;
 
-
+    //compute the norm of the vector.
     norm = norm3d(quaternion.x, quaternion.y,quaternion.z);
     if(tid < 360){
         x = quaternion.x/norm;
@@ -53,14 +66,21 @@ __global__ void compute_unit_quaternions(double4* res, double3 quaternion){
         angle = CUDART_PI/180 * tid;
         sin_2 = sin(angle/2);
         cos_2 = cos(angle/2);
-        res[tid] = make_double4(x*sin_2, y*sin_2 , z*sin_2 , cos_2);
+        res[tid] = make_double4(x*sin_2, y*sin_2 , z*sin_2 , cos_2);//computed accordingly to quaternion explained in the report.
     }
 
 }
 
+/**
+ * Main function of the code. It parse the file and retrieve all the necessary data for the computation.
+ * It takes as input the mol2 file that describe the molecule.
+ **/
 int main(int argc, char** argv){
 
     std::string mol_file = argv[1];
+    
+    std::vector<Rotamer> rotamers;
+    std::vector<atom_st> atoms;
     //RWMol *m = Mol2FileToMol( mol_file );
     //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,true,false,CORINA,false ) );
 
@@ -75,9 +95,9 @@ int main(int argc, char** argv){
      */
     //std::shared_ptr<RDKit::ROMol> mol( RDKit::Mol2FileToMol( mol_file,true,true,CORINA,false ) );
 
+    // Initialize the graph.
     Graph graph = Graph(mol->getNumAtoms());
     
-
     auto conf = mol->getConformer();
     
     std::cout << "number of bonds: " << mol->getNumBonds() << '\n';// mol2->getNumBonds() << '\n';
@@ -86,12 +106,13 @@ int main(int argc, char** argv){
         RDKit::MolOps::findSSSR( *mol );
     }
 
-    for( unsigned int i = 0; i < mol->getNumBonds() ; i++ ) {
-        const RDKit::Bond *bond = mol->getBondWithIdx( i );
-    }
+    //for( unsigned int i = 0; i < mol->getNumBonds() ; i++ ) {
+    //    const RDKit::Bond *bond = mol->getBondWithIdx( i );
+    //}
 
-    std::vector<Rotamer> rotamers;
-
+    // Get all the Bond in the mol and add the valid ones to the rotamers' vector.
+    // Since the Bond in rings and the Double bond are not considerated useful for
+    // the rotation, it discards them.
     for( unsigned int i = 0; i < mol->getNumBonds() ; i++ ) {
         const RDKit::Bond *bond = mol->getBondWithIdx( i );
         unsigned int startingAtom, endingAtom;
@@ -121,8 +142,8 @@ int main(int argc, char** argv){
         }
     }
 
-    std::vector<atom_st> atoms;
-
+   
+    // Add all the atoms to the atoms' vector
     for(auto atom : mol->atoms()){
         uint id = atom->getIdx();
         auto pos_tmp = conf.getAtomPos(id);
@@ -133,7 +154,7 @@ int main(int argc, char** argv){
         atoms.push_back(at);
     }
 
-
+    //Initialize the result storing structure.
     max_value max_dist;
     max_dist.distance = 0;
 
@@ -143,11 +164,15 @@ int main(int argc, char** argv){
     //Rotamer rt = rotamers[0];
     //vector<Rotamer> tmp_rotamers ={rotamers[0], rotamers[1]};
     auto start = std::chrono::high_resolution_clock::now();
+    // Cycle through all the available rotamers 
     for(auto rt : rotamers){
 
         bool analize;
+
+        // Removing the analize edge/bond
         graph.removeEdge(rt.getBeginAtom().id, rt.getEndingAtom().id);
 
+        // Compute the two halves of the splitted molecule.
         graph.DFSlinkedNode(rt.getBeginAtom().id, first_half);
         graph.DFSlinkedNode(rt.getEndingAtom().id, second_half);
 
@@ -164,7 +189,11 @@ int main(int argc, char** argv){
         max_second_half.distance = 0;
 
         Rotation r;
+
+        // If the bond split, create one half with only one atom. The bond is not a rotamer,
+        // so I don't rotate around it and skip the computation.
         if(atoms_first_half.size() > 1 && second_half.size() > 1){
+            
             analize = true;
             cout << "Checking rotamer: " << rt.getBond().getIdx() << " ";
             cout << "Starting Atom: " << rt.getBeginAtom().id << " Ending Atom: " << rt.getEndingAtom().id << " ";
@@ -183,6 +212,8 @@ int main(int argc, char** argv){
 
             double3 tmp_vector = rt.getVector();
 
+            // The computatioin of the unit quaternion is done in parallel for all
+            // the angle, launching the kernel with 360 threads, one for each angle.
             compute_unit_quaternions<<<1,360>>>(unit_quaternions,tmp_vector);
 
             cudaDeviceSynchronize();
@@ -190,16 +221,20 @@ int main(int argc, char** argv){
             
             double max = 0;
             double* res;
-            //cout << "main line " << __LINE__ << endl;
-            for(int c = 0; c < 360; c += NUM_OF_STREAMS ){
+            
+            for(int c = 0; c < 360; c += NUM_OF_BLOCKS ){
                 
                 vector<vector<atom_st>> rot_first_half;
                 
                 double3 tmp = rt.getBeginAtom().position;
 
+                // Compute the rotation and storing the result
                 rot_first_half = r.rotate_v5(c , atoms_first_half, tmp, unit_quaternions);
 
-                for(int rotation = 0; rotation < NUM_OF_STREAMS; rotation++){
+                // Add all the element of the vector of vectors in a single vector with all the atoms.
+                // The atoms are in order of angle of rotation and every time is added the missing atoms
+                // of the second half of the molecule, in order to compute the internal distance.
+                for(int rotation = 0; rotation < NUM_OF_BLOCKS; rotation++){
                     //cout << "main line " << __LINE__ << endl;
                     for(int i = 0; i < atoms_first_half.size(); i++){
                         distance_to_compute.push_back(rot_first_half[rotation][i]);
@@ -210,10 +245,12 @@ int main(int argc, char** argv){
                     }
                 }
 
-            
-                res = distance_v3(distance_to_compute, atoms.size(), NUM_OF_STREAMS);
+                // Compute the internal distance, storing the result in res.
+                res = distance_v3(distance_to_compute, atoms.size(), NUM_OF_BLOCKS);
                 
-                for(int i = 0; i < NUM_OF_STREAMS;i++){
+                // Select the rotation that has the highest internal distance,
+                // cycling through the results stored in res. 
+                for(int i = 0; i < NUM_OF_BLOCKS;i++){
                     if(res[i] > max_first_half.distance) {
                         max_first_half.distance = res[i];
                         max_first_half.angle = c+i;
@@ -251,6 +288,7 @@ int main(int argc, char** argv){
         atoms_first_half.clear();
         atoms_second_half.clear();
 
+        // Adding again the edge corresponding to the bond, before computing another bond/rotamer.
         graph.addEdge(rt.getBeginAtom().id,rt.getEndingAtom().id);
         if(analize)
             printf("For Rotamer %d, the max distance computed is: %lf,\n with a first angle: %d \n",\
