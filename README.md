@@ -95,6 +95,14 @@ In order to use it is necessary to have the Libraries and set the path to the rd
 
 In case the driver and cuda version used are older than "Pascal" architecture and cuda 8  will be necessary to change also the architecture set at compile time.
 
+### How to use it
+
+Example of the command for running the code:
+'''
+cd Project
+./main data/nameOfTheMolecule.mol2
+'''
+
 ### System and Driver Used
 
 The code has been developped using and Nvidia GTX 1660 Super, using 440.100 drivers and cuda 10.2 .
