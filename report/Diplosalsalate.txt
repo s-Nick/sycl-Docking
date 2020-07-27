@@ -1,0 +1,66 @@
+number of bonds: 34
+Bond 4 is a DOUBLE bond stAtom: 1 endAtom: 2
+Bond 7 is in a ring stAtom: 4 endAtom: 9
+Bond 8 is in a ring stAtom: 4 endAtom: 5
+Bond 9 is in a ring stAtom: 5 endAtom: 6
+Bond 11 is in a ring stAtom: 6 endAtom: 7
+Bond 13 is in a ring stAtom: 7 endAtom: 8
+Bond 15 is in a ring stAtom: 8 endAtom: 9
+Bond 18 is a DOUBLE bond stAtom: 10 endAtom: 11
+Bond 21 is in a ring stAtom: 13 endAtom: 18
+Bond 22 is in a ring stAtom: 13 endAtom: 14
+Bond 23 is in a ring stAtom: 14 endAtom: 15
+Bond 25 is in a ring stAtom: 15 endAtom: 16
+Bond 27 is in a ring stAtom: 16 endAtom: 17
+Bond 29 is in a ring stAtom: 17 endAtom: 18
+Checking rotamer: 0 Starting Atom: 0 Ending Atom: 1 number of atom in first half: 4
+Computed distance for the first part,
+the max distance compute is 5317.578737 with angle 282 around rotamer: 0
+For Rotamer 0, the max distance computed is: 5317.578737,
+ with a first angle: 282 
+Checking rotamer 1 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 2 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 3 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer: 5 Starting Atom: 1 Ending Atom: 3 number of atom in first half: 6
+Computed distance for the first part,
+the max distance compute is 5372.047628 with angle 53 around rotamer: 5
+For Rotamer 5, the max distance computed is: 5372.047628,
+ with a first angle: 53 
+Checking rotamer: 6 Starting Atom: 3 Ending Atom: 4 number of atom in first half: 7
+Computed distance for the first part,
+the max distance compute is 5492.685368 with angle 276 around rotamer: 6
+For Rotamer 6, the max distance computed is: 5492.685368,
+ with a first angle: 276 
+Checking rotamer 10 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 12 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 14 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 16 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer: 17 Starting Atom: 9 Ending Atom: 10 number of atom in first half: 17
+Computed distance for the first part,
+the max distance compute is 5319.601822 with angle 350 around rotamer: 17
+For Rotamer 17, the max distance computed is: 5319.601822,
+ with a first angle: 350 
+Checking rotamer: 19 Starting Atom: 10 Ending Atom: 12 number of atom in first half: 19
+Computed distance for the first part,
+the max distance compute is 5317.648071 with angle 357 around rotamer: 19
+For Rotamer 19, the max distance computed is: 5317.648071,
+ with a first angle: 357 
+Checking rotamer: 20 Starting Atom: 12 Ending Atom: 13 number of atom in first half: 20
+Computed distance for the first part,
+the max distance compute is 5386.735342 with angle 264 around rotamer: 20
+For Rotamer 20, the max distance computed is: 5386.735342,
+ with a first angle: 264 
+Checking rotamer 24 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 26 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 28 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 30 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer: 31 Starting Atom: 18 Ending Atom: 19 number of atom in first half: 30
+Computed distance for the first part,
+the max distance compute is 5322.408234 with angle 291 around rotamer: 31
+For Rotamer 31, the max distance computed is: 5322.408234,
+ with a first angle: 291 
+Checking rotamer 32 ... Too few atoms in the partition, rotamer not analized
+Checking rotamer 33 ... Too few atoms in the partition, rotamer not analized
+duration time[ms]: 164
+The maximum distance computed is 5492.685368
+Computed with an angle of 276, around the rotamer 6
