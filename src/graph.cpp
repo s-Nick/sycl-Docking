@@ -50,18 +50,13 @@ Graph::~Graph(){
 
 void Graph::DFSlinkedNode(unsigned int startingNode, std::vector<unsigned int>& linkedNodes){
     linkedNodes.push_back(startingNode);
-    //std::vector<unsigned int>::iterator it = linkedNodes.begin();
-    //std::vector<unsigned int>::iterator end = linkedNodes.end();
     auto it = startingNode;
-    //std::cout << "Current Node: " << startingNode << " \n";
     for(unsigned int i = 0; i < numOfVert ; i++){
         if(adj_matrix[it][i]){
-            //std::cout << i << std::endl;
             if(std::find(linkedNodes.begin(), linkedNodes.end(), i) == linkedNodes.end()){
                 DFSlinkedNode(i,linkedNodes);
             }
         }
     }
-    //std::cout << "end\n";
     return;
 }
