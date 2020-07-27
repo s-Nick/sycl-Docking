@@ -98,10 +98,10 @@ In case the driver and cuda version used are older than "Pascal" architecture an
 ### How to use it
 
 Example of the command for running the code:
-'''
-cd Project
-./main data/nameOfTheMolecule.mol2
-'''
+```shellsession
+$ cd Project
+$ ./main data/nameOfTheMolecule.mol2
+```
 
 ### System and Driver Used
 
