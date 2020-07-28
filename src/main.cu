@@ -203,12 +203,12 @@ int main(int argc, char** argv){
             vector<atom_st> distance_to_compute;
             double4* unit_quaternions;
 
-            cudaMallocManaged(&unit_quaternions, 2*360*sizeof(double4));
+            cudaMallocManaged(&unit_quaternions, 360*sizeof(double4));
 
             int deviceId;
             cudaGetDevice(&deviceId);
 
-            cudaMemPrefetchAsync(unit_quaternions,2*360*sizeof(double4),deviceId);
+            cudaMemPrefetchAsync(unit_quaternions,360*sizeof(double4),deviceId);
 
             double3 tmp_vector = rt.getVector();
 
