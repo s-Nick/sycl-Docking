@@ -200,7 +200,7 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
     first_translation<<<1,number_of_atoms>>>(atoms,passingPoint, number_of_atoms);
 
     checkCuda( cudaDeviceSynchronize(), __LINE__);
-    checkCuda( cudaMemPrefetchAsync(unit_quaternion,2*360*sizeof(double4), deviceId) ,__LINE__);
+    checkCuda( cudaMemPrefetchAsync(unit_quaternion,360*sizeof(double4), deviceId) ,__LINE__);
     checkCuda( cudaMemPrefetchAsync(atoms,size_of_atoms,deviceId), __LINE__);
     
     rotation_kernel_v5<<<NUM_OF_BLOCKS,64,0>>>(d_res,atoms,number_of_atoms,passingPoint,unit_quaternion,angle);
