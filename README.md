@@ -1,5 +1,4 @@
-# Parallel Programming Project
-## Summer semester of '20
+#PROJECT NAME(place holder)
 
 ### Used Libraries
 
