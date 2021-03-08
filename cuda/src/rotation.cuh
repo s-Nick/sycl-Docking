@@ -3,12 +3,13 @@
 
 #include<vector>
 #include "atom.cuh"
+#include "helper.h"
 
 class Rotation{
     
     public:
         
-        std::vector<std::vector<atom_st>> rotate_v5(int angle, std::vector<atom_st>& atoms,double3& passingPoint,double4* unit_quaternion);
+        std::vector<std::vector<atom_st>> rotate_v5(int angle, std::vector<atom_st>& atoms, double3& passingPoint, double4* unit_quaternion);
     };
 
 #endif
