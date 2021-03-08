@@ -209,7 +209,8 @@ int main(int argc, char** argv){
             cudaGetDevice(&deviceId);
 
             cudaMemPrefetchAsync(unit_quaternions,360*sizeof(double4),deviceId);
-
+            
+            //Vector of the rotamer considered in the loop.
             double3 tmp_vector = rt.getVector();
 
             // The computatioin of the unit quaternion is done in parallel for all

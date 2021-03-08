@@ -29,6 +29,7 @@ __device__ void initFirstRow_v2(double rotation_matrix[3][3], double4 & unit_qua
     rotation_matrix[0][1] = 2*(unit_quat.x*unit_quat.y - unit_quat.z*unit_quat.w);
 
     rotation_matrix[0][2] = 2*(unit_quat.x*unit_quat.z + unit_quat.y*unit_quat.w);
+    //if the result is zero negative convert in zero positive, cuda interpretation is confused about
     for(int i= 0;i < 3;i++){
         if(rotation_matrix[0][i] == -0) rotation_matrix[0][i] = 0;
     }
