@@ -6,7 +6,7 @@
 + * useful information: id and position.
 + **/
 struct atom_st {
-    unsigned int id;
+    unsigned int atom_id;
     cl::sycl::double3 position;
 };
 

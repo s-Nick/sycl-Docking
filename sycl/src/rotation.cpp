@@ -3,7 +3,7 @@
 
 #include "rotation.h"
 
-#include "math_constants.h"
+#include<cmath>
 #include<stdio.h>
 #include<iostream>
 
@@ -11,6 +11,7 @@
 
 #define NUM_OF_BLOCKS 360
 class rotation;
+class translation;
 /**
  * This function is used to set the mememory of the host and the device in order to compute the rotation using the rotation kernel.
  * At the end of the computation all the rotated positions are brought to the device memory and stored in a vector of vectors for 
@@ -42,18 +43,34 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         }
     };
 
-    int number_of_atoms = atoms_st.size();
+    const int number_of_atoms = atoms_st.size();
     int size_of_atoms = number_of_atoms*sizeof(atoms_st);
 
-    atom_st* atoms = (atom_st*)malloc(size_of_atoms);
-
-    
-
+   
+    //cl::sycl::device gpu =cl::sycl::host_selector{}.select_device();
     cl::sycl::device gpu =cl::sycl::gpu_selector{}.select_device();
     cl::sycl::queue q_gpu(gpu, exception_handler);
 
-    atom_st *h_res = (atom_st *)cl::sycl::malloc_host(size_of_atoms * NUM_OF_BLOCKS, q_gpu);
-    atom_st *d_res = (atom_st *)cl::sycl::malloc_device(size_of_atoms * NUM_OF_BLOCKS, q_gpu);
+    //std::cout << gpu.get_info<cl::sycl::info::device::vendor>() << std::endl;
+
+     //atom_st* atoms = (atom_st*)malloc(size_of_atoms);
+
+    atom_st* atoms = cl::sycl::malloc_shared<atom_st>(size_of_atoms,q_gpu);
+
+    atom_st *h_res = cl::sycl::malloc_host<atom_st>(size_of_atoms * NUM_OF_BLOCKS, q_gpu);
+    atom_st *d_res = cl::sycl::malloc_device<atom_st>(size_of_atoms * NUM_OF_BLOCKS, q_gpu);
+
+    cl::sycl::double4* d_unit_quaternion = cl::sycl::malloc_shared<cl::sycl::double4>(sizeof(cl::sycl::double4)*NUM_OF_BLOCKS, q_gpu);
+
+    //initialize d_unit_quaternion
+    for(int c = 0; c < NUM_OF_BLOCKS; c++){
+        for(int i = 0; i < 4 ; i++){
+            d_unit_quaternion[c][i] = unit_quaternion[c][i];
+        }
+    }
+    
+    //q_gpu.memcpy(d_unit_quaternion, unit_quaternion, sizeof(unit_quaternion) );
+    
 
     //initialize vector of atoms
     int i = 0;
@@ -61,107 +78,200 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         atoms[i] = at;
         i++;
     }
-    //cl::sycl::double3 passingPoint = pp;
+    
+    
+    cl::sycl::double3* passingPoint = cl::sycl::malloc_shared<cl::sycl::double3>(sizeof(cl::sycl::double3),q_gpu);
+
+    passingPoint->x() = pp.x();
+    passingPoint->y() = pp.y();
+    passingPoint->z() = pp.z();
+
+    /*for(int i = 0; i < 3 ;i++){
+        passingPoint[i] = pp[i];
+    }*/
+    
+    q_gpu.memcpy(passingPoint,&pp,sizeof(cl::sycl::double3));
+    q_gpu.wait();
     {//SYCL buffer scope
 
-        cl::sycl::buffer<atom_st*, 1 > buf_atoms(&atoms,cl::sycl::range<1>(1));
-        cl::sycl::buffer<cl::sycl::double3,1> buf_passingPoint(&pp, cl::sycl::range<1>(1));
-        cl::sycl::buffer<cl::sycl::double4,1> buf_unitQuaternion(unit_quaternion, cl::sycl::range<1>(1));
         
-        q_gpu.submit([&] (cl::sycl::handler& h) {
+        
+        //std::cout << "rotation line " << __LINE__ << std::endl;
 
-            auto d_atoms = buf_atoms.get_access<cl::sycl::access::mode::read_write>(h);
-            auto d_pp = buf_passingPoint.get_access<cl::sycl::access::mode::read>(h);
-            auto d_unitQuaternion = buf_unitQuaternion.get_access<cl::sycl::access::mode::read>(h);
+        //auto translation_s = q_gpu.submit([&] (cl::sycl::handler& h) {
+            
+            //cl::sycl::stream out(2048, 256, q_gpu);
+            
+            //std::cout << "rotation line " << __LINE__ << std::endl;
 
-            h.parallel_for<class rotation>(cl::sycl::range<1>(number_of_atoms), [=](cl::sycl::id<1> tidx)  {
-                    //the right part may be wrong in the way it gets the number
-                    d_atoms[tidx]->position[0] -= d_pp[0][0];
-                    d_atoms[tidx]->position[1] -= d_pp[0][1];
-                    d_atoms[tidx]->position[2] -= d_pp[0][2];
-            });
+            //cl::sycl::range<1> num_groups{NUM_OF_BLOCKS};
+            //std::cout << "rotation line " << __LINE__ << std::endl;
+            //cl::sycl::range<1> group_size{64};
+            //std::cout << "rotation line " << __LINE__ << std::endl;
 
-            cl::sycl::range<1> num_groups{NUM_OF_BLOCKS};
-            cl::sycl::range<1> group_size{number_of_atoms};
-            h.parallel_for_work_group(num_groups, group_size, [=](cl::sycl::group<1> grp){
-                int bid = grp.get_id(0);
-                double rot_matrix[3][3];
-                // Initialize rotation matrix in 
-                grp.parallel_for_work_item([&](cl::sycl::h_item<1> it){
-                    // Initialize First row of the rotation matrix
-                    if( it.get_local_id() == 0 ){
-                        rot_matrix[0][0] = 1-2*(cl::sycl::pow<double>(d_unitQuaternion[bid][1],2)) + \
-                                            cl::sycl::pow<double>(d_unitQuaternion[bid][2],2);
-                        rot_matrix[0][1] = 2 * (d_unitQuaternion[bid][0] * d_unitQuaternion[bid][1] - \
-                                                d_unitQuaternion[bid][2] * d_unitQuaternion[bid][3]);
-                        rot_matrix[0][2] = 2 * (d_unitQuaternion[bid][0] * d_unitQuaternion[bid][3] + \
-                                                d_unitQuaternion[bid][1] * d_unitQuaternion[bid][3]);
-                    }//be careful on the sign of 0, it may cause error in computation.
-                    else if(it.get_local_id() == 1){
-                        rot_matrix[1][0] = 2 * (d_unitQuaternion[bid][0] * d_unitQuaternion[bid][1] + \
-                                                d_unitQuaternion[bid][2] * d_unitQuaternion[bid][3]);
-                        rot_matrix[1][1] = 1 - 2 * (cl::sycl::pow<double>(d_unitQuaternion[bid][0], 2) +
-                                                    cl::sycl::pow<double>(d_unitQuaternion[bid][2], 2));
-                        rot_matrix[1][2] = 2 * (d_unitQuaternion[bid][1] * d_unitQuaternion[bid][2] - \
-                                                d_unitQuaternion[bid][0] * d_unitQuaternion[bid][3]);
-                    }
-                    else if( it.get_local_id() == 2){
-                        rot_matrix[2][0] = 2 * (d_unitQuaternion[bid][0] * d_unitQuaternion[bid][2] - \
-                                                d_unitQuaternion[bid][1] * d_unitQuaternion[bid][3]);
-                        rot_matrix[2][1] = 2 * (d_unitQuaternion[bid][1] * d_unitQuaternion[bid][2] + \
-                                                d_unitQuaternion[bid][0] * d_unitQuaternion[bid][3]);
-                        rot_matrix[2][2] = 1 - 2 * (cl::sycl::pow<double>(d_unitQuaternion[bid][0], 2) + \
-                                                    cl::sycl::pow<double>(d_unitQuaternion[bid][1], 2));
-                    }
-                });
-                grp.parallel_for_work_item([&] (cl::sycl::h_item<1> it){
-                    int tidx = it.get_local_id();
-                    int index = tidx + bid*number_of_atoms;
-                    if(index < number_of_atoms*(bid+1) && number_of_atoms*bid <= index ){
-                        
-                        d_res[index].id = d_atoms[tidx]->id;
+            
+            //cl::sycl::range<1> translation_thread_number{64};
 
-                        d_res[index].position[0] = d_atoms[tidx]->position[0] * rot_matrix[0][0] + \
-                                                d_atoms[tidx]->position[1] * rot_matrix[0][1] + \
-                                                d_atoms[tidx]->position[2] * rot_matrix[0][2] + d_pp[0][0];
+            q_gpu.parallel_for<class translation>(cl::sycl::nd_range<1>(64,64),
+                                             [=](cl::sycl::nd_item<1>it){           
+                //int bid = it.get_group().get_id();
+                
+                //out << "bid number " << bid << cl::sycl::endl;
 
-                        d_res[index].position[1] = d_atoms[tidx]->position[0] * rot_matrix[1][0] + \
-                                                   d_atoms[tidx]->position[1] * rot_matrix[1][1] + \
-                                                   d_atoms[tidx]->position[2] * rot_matrix[1][2] + d_pp[0][1];
+                int tidx = it.get_local_id();
+                
+                //the right part may be wrong in the way it gets the number
+                if( tidx < number_of_atoms){
+                    //out << "threadId.x " <<int(tidx) << cl::sycl::endl;
+                    atoms[tidx].position.x() -= passingPoint->x();//[0][0];
+                    atoms[tidx].position.y() -= passingPoint->y();//[0][1];
+                    atoms[tidx].position.z() -= passingPoint->z();//[0][2];
+                }
 
-                        d_res[index].position[2] = d_atoms[tidx]->position[0] * rot_matrix[2][0] + \
-                                                   d_atoms[tidx]->position[1] * rot_matrix[2][1] + \
-                                                   d_atoms[tidx]->position[2] * rot_matrix[2][2] + d_pp[0][2];
-                    }
-                });//second for_work_item end
-            });// for_work_group end
-
-        });// submit end
+            });// End tranlsation parallel_for
+        //}); // end translation submit
+        q_gpu.wait();
+        //std::cout << "rotation line " << __LINE__ << std::endl;
+        //translation_s.wait();
+        
+        /*
         try{
             q_gpu.wait_and_throw();
         }catch(cl::sycl::exception const& e){
             std::cout << "SYCL: synchronous exception occured, Rotation class " << __LINE__ << "\n"
             << e.what() << std::endl; 
         }
+        */
+        q_gpu.submit([&] (cl::sycl::handler& h) {
+            
+            //h.depends_on(translation_s);
 
-        q_gpu.memcpy(h_res, d_res, size_of_atoms * NUM_OF_BLOCKS);
+            // NEEDED FOR DEBUGGING
+            //cl::sycl::stream out(2048, 256, h);
+
+            cl::sycl::range<1> global {NUM_OF_BLOCKS*64};
+            cl::sycl::range<1> local {64};
+
+            cl::sycl::range<2> rot_matrix_range(3,3);
+
+            cl::sycl::accessor<double, 2, cl::sycl::access_mode::discard_read_write,
+                                cl::sycl::access::target::local>
+                rot_matrix_acc(rot_matrix_range, h ); 
+
+            h.parallel_for<class rotation>(cl::sycl::nd_range<1>(global,local), 
+                                           [=](cl::sycl::nd_item<1> grp){
+                
+                int bid = grp.get_group().get_id();
+
+                //double rot_matrix[3][3];
+
+                //Initialize Rotation matrix;
+                if(bid < 360){
+                    //out << "bid " << bid << cl::sycl::endl;
+                    
+                    if( grp.get_local_id(0) == 0 ){ //get_local_id
+                        
+                        rot_matrix_acc[0][0] = 1-2*( d_unit_quaternion[bid].y() * d_unit_quaternion[bid].y()  + \
+                                                 d_unit_quaternion[bid].z() * d_unit_quaternion[bid].z());
+                        rot_matrix_acc[0][1] = 2 * (d_unit_quaternion[bid].x() * d_unit_quaternion[bid].y() - \
+                                                d_unit_quaternion[bid].z() * d_unit_quaternion[bid].w());
+                        rot_matrix_acc[0][2] = 2 * (d_unit_quaternion[bid].x() * d_unit_quaternion[bid].z() + \
+                                                d_unit_quaternion[bid].y() * d_unit_quaternion[bid].w());
+                        //out << "bid " << bid  << " tidx " << grp.get_local_id(0)<< cl::sycl::endl;
+                    }//be careful on the sign of 0, it may cause error in computation.
+                    else if(grp.get_local_id(0) == 1){
+                        rot_matrix_acc[1][0] = 2 * (d_unit_quaternion[bid].x() * d_unit_quaternion[bid].y() + \
+                                                d_unit_quaternion[bid].z() * d_unit_quaternion[bid].w());
+                        rot_matrix_acc[1][1] = 1 - 2 * ( d_unit_quaternion[bid].x() * d_unit_quaternion[bid].x() +
+                                                     d_unit_quaternion[bid].z() *d_unit_quaternion[bid].z() );
+                        rot_matrix_acc[1][2] = 2 * (d_unit_quaternion[bid].y() * d_unit_quaternion[bid].z() - \
+                                                d_unit_quaternion[bid].x() * d_unit_quaternion[bid].w());
+                    }
+                    else if( grp.get_local_id(0) == 2){
+                        rot_matrix_acc[2][0] = 2 * (d_unit_quaternion[bid].x() * d_unit_quaternion[bid].z() - \
+                                                d_unit_quaternion[bid].y() * d_unit_quaternion[bid].w());
+                        rot_matrix_acc[2][1] = 2 * (d_unit_quaternion[bid].y() * d_unit_quaternion[bid].z() + \
+                                                d_unit_quaternion[bid].x() * d_unit_quaternion[bid].w());
+                        rot_matrix_acc[2][2] = 1 - 2 * ( d_unit_quaternion[bid].x() * d_unit_quaternion[bid].x() + \
+                                                     d_unit_quaternion[bid].y() * d_unit_quaternion[bid].y() );
+                    }
+                    //Rotate the atoms
+                    grp.barrier();
+                    
+                    int tidx = grp.get_local_id(0);
+                    int index = tidx + bid*number_of_atoms;
+                    int tmp = bid+1;
+                    if(index < number_of_atoms*tmp && number_of_atoms*bid <= index ){
+                        
+                        d_res[index].atom_id = atoms[tidx].atom_id;
+
+                        d_res[index].position.x() = atoms[tidx].position.x() * rot_matrix_acc[0][0] + \
+                                                atoms[tidx].position.y() * rot_matrix_acc[0][1] + \
+                                                atoms[tidx].position.z() * rot_matrix_acc[0][2] + passingPoint->x();
+
+                        d_res[index].position.y() = atoms[tidx].position[0] * rot_matrix_acc[1][0] + \
+                                                atoms[tidx].position[1] * rot_matrix_acc[1][1] + \
+                                                atoms[tidx].position[2] * rot_matrix_acc[1][2] + passingPoint->y();
+
+                        d_res[index].position.z() = atoms[tidx].position[0] * rot_matrix_acc[2][0] + \
+                                                atoms[tidx].position[1] * rot_matrix_acc[2][1] + \
+                                                atoms[tidx].position[2] * rot_matrix_acc[2][2] + passingPoint->z();
+                    }
+                    
+                }
+
+            });// end rotation parallel_for
+        }); // end rotation submit
+        
+        try{
+            q_gpu.wait_and_throw();
+        }catch(cl::sycl::exception const& e){
+            std::cout << "SYCL: synchronous exception occured, Rotation class " << __LINE__ << "\n"
+            << e.what() << std::endl; 
+        }
+        
+        //std::cout << "rotation line " << __LINE__ << std::endl;
+        q_gpu.memcpy(h_res, d_res, size_of_atoms * NUM_OF_BLOCKS*number_of_atoms);
         q_gpu.wait();
     }// SYCL BUFFER Scope
-
+    
     std::vector<std::vector<atom_st>> result_to_return;
+    
     std::vector<atom_st> tmp;
+
+    //std::cout << "rotation line " << __LINE__ << std::endl;
+
     //copy the results in order to free the memory and to pass the result to other functions for further usage
-    for (int i = 0; i < NUM_OF_BLOCKS; i++)
-    {
-        for (int c = atoms_st.size() * i; c < atoms_st.size() * (i + 1); c++)
-        {
+    for (int i = 0; i < NUM_OF_BLOCKS; i++){
+        for (int c = atoms_st.size() * i; c < atoms_st.size() * (i + 1); c++){
             tmp.push_back(h_res[c]);
         }
         result_to_return.push_back(tmp);
         tmp.clear();
     }
+       
+    //std::cout << "rotation line " << __LINE__ << std::endl;
+    
+    
+    //DEBUG PRINTING
+    /*
+    for(int i = 0; i < NUM_OF_BLOCKS; i++){
+        std::cout << "angle of rotation : " << i << std::endl;
+        for (int c = 0; c < result_to_return[i].size(); c++){
+            std::cout << result_to_return[i][c].atom_id << " ";
+            std::cout << result_to_return[i][c].position.x() << " ";
+            std::cout << result_to_return[i][c].position.y() << " ";
+            std::cout << result_to_return[i][c].position.z() << std::endl;
+        }
+    }
+    */
 
+    //free memory allocated using sycl::malloc
+    cl::sycl::free(passingPoint,q_gpu);
+    cl::sycl::free(d_unit_quaternion,q_gpu);
+    cl::sycl::free(atoms,q_gpu);
     cl::sycl::free(d_res,q_gpu);
     cl::sycl::free(h_res,q_gpu);
+    
     return result_to_return;
 }
