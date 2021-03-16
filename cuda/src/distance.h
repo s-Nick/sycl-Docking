@@ -1,9 +1,8 @@
 #ifndef DISTANCE_H_
 #define DISTANCE_H_
 
-#include "atom.cuh"
 #include <vector>
-
+#include "helper.h"
 
 using namespace std;
 

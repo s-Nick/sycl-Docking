@@ -3,7 +3,7 @@
 
 #include<vector>
 #include "atom.cuh"
-#include "helper.h"
+
 
 class Rotation{
     
