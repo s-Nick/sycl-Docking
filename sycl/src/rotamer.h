@@ -4,9 +4,9 @@
 #include <GraphMol/GraphMol.h>
 #include <GraphMol/RDKitBase.h>
 #include <GraphMol/SmilesParse/SmilesWrite.h>
-//#include "rotation.h"
+
+#include "rotation.h"
 #include "atom.h"
-#include<CL/sycl.hpp>
 
 class Rotamer
 {

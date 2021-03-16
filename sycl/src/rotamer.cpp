@@ -1,6 +1,12 @@
 
+#include<CL/sycl.hpp>
 
 #include "rotamer.h"
+#include <GraphMol/GraphMol.h>
+#include <GraphMol/RDKitBase.h>
+#include <GraphMol/SmilesParse/SmilesWrite.h>
+#include "atom.h"
+
 
 
 /**
@@ -32,8 +38,6 @@ Rotamer::Rotamer(const RDKit::Bond b,
 cl::sycl::double3 Rotamer::ComputeVector(atom_st &startingAtom, atom_st &endAtom)
 {
     cl::sycl::double3 vector;
-    //be careful to the fact that it may be a pointer -> check if result
-    // is not consistent
     vector[0] = endAtom.position[0] - startingAtom.position[0];
     vector[1] = endAtom.position[1] - startingAtom.position[1];
     vector[2] = endAtom.position[2] - startingAtom.position[2];

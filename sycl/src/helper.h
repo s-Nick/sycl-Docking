@@ -7,4 +7,8 @@
 #include "rotamer.h"
 #include "rotation.h"
 
+<<<<<<< HEAD
 #endif
+=======
+#endif
+>>>>>>> ba2da62dd1524922d0a73e04c30c1818b2513770
