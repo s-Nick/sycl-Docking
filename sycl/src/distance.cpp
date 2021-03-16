@@ -67,7 +67,7 @@ double* distance(vector<atom_st> atoms, int number_of_atoms, int num_of_block){
             cl::sycl::range<1> group{512};
 
             //Allocate buffer for reduction holder;
-            cl::sycl::range<1> tmp_range(512);
+            cl::sycl::range<1> tmp_range(1024);
 
             cl::sycl::accessor<double, 1, cl::sycl::access_mode::discard_read_write,
                                 cl::sycl::access::target::local>
@@ -93,10 +93,10 @@ double* distance(vector<atom_st> atoms, int number_of_atoms, int num_of_block){
                     }
                 }
 
-                it.mem_fence();
+                it.barrier();
 
-                int tidx = it.get_local_id(0);
-                int index = tidx + bid*number_of_atoms;
+                unsigned int tidx = it.get_local_id(0);
+                unsigned int index = tidx + bid*number_of_atoms;
 
                 if( index < (bid+1)* number_of_atoms ){
                     tmp_acc[tidx] = d_distance[index];
@@ -104,18 +104,18 @@ double* distance(vector<atom_st> atoms, int number_of_atoms, int num_of_block){
                 else
                     tmp_acc[tidx] = 0;
 
-                it.mem_fence();
+                it.barrier();
                 
 
                 
-                for(int s = it.get_local_range(0)/2 ; s > 0; s/= 2 ){
+                for(unsigned int s = it.get_local_range(0)/2 ; s > 0; s >>= 1 ){
                     if( tidx < s ){
                         tmp_acc[tidx] += tmp_acc[tidx+s];
                     }
-                    it.mem_fence();
+                    it.barrier();
                 } 
 
-                it.mem_fence();
+                it.barrier();
                 if(tidx == 0){
                     d_res[bid] = tmp_acc[tidx];
                     //out << "reduction: " << d_res[bid] << " " << bid << cl::sycl::endl;
