@@ -37,7 +37,8 @@ struct max_value{
     double distance;
     int angle;
     Rotamer rt;
-    atom_st* rot_mol_fst_half;
+    //atom_st* rot_mol_fst_half;
+    std::string mol_name;
 };
 
 
@@ -71,29 +72,14 @@ __global__ void compute_unit_quaternions(double4* res, double3 quaternion){
 
 }
 
-/**
- * Main function of the code. It parse the file and retrieve all the necessary data for the computation.
- * It takes as input the mol2 file that describe the molecule.
- **/
-int main(int argc, char** argv){
-
-    std::string mol_file = argv[1];
-    
+void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     std::vector<Rotamer> rotamers;
     std::vector<atom_st> atoms;
-    //RWMol *m = Mol2FileToMol( mol_file );
-    //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,true,false,CORINA,false ) );
-
-    /**
-     * The following initialization works with the aspirin's mol2 file provided by the Professor.
-     * The declaration above works only with the file found online.
-     */
-    std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,false,true,CORINA,false ) );
-    /**The next Line read the molecule removing the H atoms, it reduce the number of possible rotors
-     *  for the aspirin and it seems to work, but idk with others molecules, so for now I keep
-     * more rotores, but with the possible right solution.
-     */
-    //std::shared_ptr<RDKit::ROMol> mol( RDKit::Mol2FileToMol( mol_file,true,true,CORINA,false ) );
+    
+    max_value max_first_half;
+    max_first_half.distance = 0;
+    max_value max_second_half;
+    max_second_half.distance = 0;
 
     // Initialize the graph.
     Graph graph = Graph(mol->getNumAtoms());
@@ -142,7 +128,7 @@ int main(int argc, char** argv){
         }
     }
 
-   
+
     // Add all the atoms to the atoms' vector
     for(auto atom : mol->atoms()){
         uint id = atom->getIdx();
@@ -155,8 +141,8 @@ int main(int argc, char** argv){
     }
 
     //Initialize the result storing structure.
-    max_value max_dist;
-    max_dist.distance = 0;
+    //max_value max_dist;
+    //max_dist.distance = 0;
 
 
     vector<unsigned int> first_half;
@@ -182,11 +168,12 @@ int main(int argc, char** argv){
         for(auto i: first_half)  atoms_first_half.push_back(atoms[i]);
         
         for(auto i : second_half) atoms_second_half.push_back(atoms[i]);
-
+        /*
         max_value max_first_half;
         max_first_half.distance = 0;
         max_value max_second_half;
         max_second_half.distance = 0;
+        */
 
         Rotation r;
 
@@ -259,8 +246,11 @@ int main(int argc, char** argv){
                     }
                 }
                 distance_to_compute.clear();
-                
+                vector<atom_st>().swap(distance_to_compute);
+
                 rot_first_half.clear();
+                vector<vector<atom_st>>().swap(rot_first_half);
+
             }
 
 
@@ -269,6 +259,7 @@ int main(int argc, char** argv){
                     max_first_half.distance, max_first_half.angle,max_first_half.rt.getBond().getIdx());
             
             cudaFree(unit_quaternions);
+            cudaFree(res);
         }
         else{
             analize = false;
@@ -282,6 +273,7 @@ int main(int argc, char** argv){
             max_dist.distance = total;
             max_dist.rt = max_first_half.rt;
             max_dist.angle = max_first_half.angle;
+            max_dist.mol_name = mol->getProp<std::string>("_Name");
         }
 
         first_half.clear();
@@ -293,16 +285,88 @@ int main(int argc, char** argv){
         graph.addEdge(rt.getBeginAtom().id,rt.getEndingAtom().id);
         if(analize)
             printf("For Rotamer %d, the max distance computed is: %lf,\n with a first angle: %d \n",\
-                 rt.getBond().getIdx(),total,max_first_half.angle);
+                rt.getBond().getIdx(),total,max_first_half.angle);
 
     }
+
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
 
     cout << "duration time[ms]: " << duration.count() << endl;
 
-    printf("The maximum distance computed is %lf\n", max_dist.distance);
+    //printf("For molecule named %s \n", mol->getProp<std::string>("_Name") );
+    std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << std::endl;
+
+    printf("The maximum distance computed is %lf\n", max_first_half.distance);
     
+    printf("Computed with an angle of %d, around the rotamer %d\n",
+        max_first_half.angle,max_first_half.rt.getBond().getIdx());
+    
+    return;
+}
+
+/**
+ * Main function of the code. It parse the file and retrieve all the necessary data for the computation.
+ * It takes as input the mol2 file that describe the molecule.
+ **/
+int main(int argc, char** argv){
+
+    std::string mol_file = argv[1];
+    char* mol_number_string = argv[2];
+    //std::vector<Rotamer> rotamers;
+    //std::vector<atom_st> atoms;
+    //RWMol *m = Mol2FileToMol( mol_file );
+    //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,true,false,CORINA,false ) );
+
+    /**
+     * The following initialization works with the aspirin's mol2 file provided by the Professor.
+     * The declaration above works only with the file found online.
+     */
+    //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,false,true,CORINA,false ) );
+    /**The next Line read the molecule removing the H atoms, it reduce the number of possible rotors
+     *  for the aspirin and it seems to work, but idk with others molecules, so for now I keep
+     * more rotores, but with the possible right solution.
+     */
+    //std::shared_ptr<RDKit::ROMol> mol( RDKit::Mol2FileToMol( mol_file,true,true,CORINA,false ) );
+
+    
+    std::ifstream molFileStream;
+    molFileStream.open(mol_file, std::ios::in);
+
+    std::vector<std::shared_ptr<RDKit::ROMol>> molecules;
+    //readMoleculesStream(molFileStream, molecules);
+    int mol_number = atoi(mol_number_string);
+    if(mol_number == 0){
+        singleMoleculeRead(molFileStream, molecules);
+    }
+    else{
+        multipleMoleculeRead(molFileStream,molecules);
+    }
+    //auto tmp = molecules[3]->getProp<std::string>("_Name");
+    
+    //Initialize the result storing structure.
+    max_value max_dist;
+    max_dist.distance = 0;
+
+
+    auto total_start = std::chrono::high_resolution_clock::now();
+
+    std::cout << molecules.size() << std::endl;
+    
+    
+    for(auto mol : molecules){
+        analyzeMolecule(max_dist, mol);
+    }
+    
+    
+    auto final_stop = std::chrono::high_resolution_clock::now();
+    auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(final_stop-total_start);
+
+    std::cout << "total duration of the computation[ms]: " << total_duration.count() << std::endl; 
+
+    printf("The overall maximum distance computed is %lf ", max_dist.distance);
+    std::cout  << " obtained from molecule " <<  max_dist.mol_name << std::endl;
+        
     printf("Computed with an angle of %d, around the rotamer %d\n",max_dist.angle,max_dist.rt.getBond().getIdx());
     
     return 0;

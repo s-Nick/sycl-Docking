@@ -100,13 +100,14 @@ double* distance_v3(vector<atom_st> atoms, int number_of_atoms, int num_of_block
     int deviceId;
     double* d_distance;
     atom_st* atoms_tmp = (atom_st*)malloc(num_of_block*size_of_atoms);
+    //std::vector<std::shared_ptr<atom_st>> atoms_tmp;
     double* res;
     atom_st * d_atoms;
 
     checkCuda( cudaMalloc(&d_distance, 2*num_of_block* number_of_atoms * number_of_atoms*sizeof(double)), __LINE__);
     
     checkCuda( cudaGetDevice(&deviceId), __LINE__);
-    checkCuda( cudaMallocManaged(&atoms_tmp, num_of_block * size_of_atoms), __LINE__);
+    //checkCuda( cudaMallocManaged(&atoms_tmp, num_of_block * size_of_atoms), __LINE__);
     
     checkCuda( cudaMallocManaged(&res, num_of_block * sizeof(double)), __LINE__);
     
@@ -144,5 +145,7 @@ double* distance_v3(vector<atom_st> atoms, int number_of_atoms, int num_of_block
     
     checkCuda ( cudaFree(d_atoms), __LINE__);
     
+    free(atoms_tmp);
+
     return res;
 }
