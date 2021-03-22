@@ -140,6 +140,11 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     //max_dist.distance = 0;
 
 
+    max_value max_first_half;
+    max_first_half.distance = 0;
+    max_value max_second_half;
+    max_second_half.distance = 0;
+
     vector<unsigned int> first_half;
     vector<unsigned int> second_half;
     //Rotamer rt = rotamers[0];
@@ -163,12 +168,12 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
         for(auto i: first_half)  atoms_first_half.push_back(atoms[i]);
         
         for(auto i : second_half) atoms_second_half.push_back(atoms[i]);
-        
+        /*
         max_value max_first_half;
         max_first_half.distance = 0;
         max_value max_second_half;
         max_second_half.distance = 0;
-        
+        */
 
         Rotation r;
 
