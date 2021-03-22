@@ -10,7 +10,7 @@ CUDA_ARCH = 61
 ARCH = -gencode arch=compute_${CUDA_ARCH},code=compute_${CUDA_ARCH} -arch sm_${CUDA_ARCH}
 CUDAFLAGS = -lcudadevrt  -rdc=true 
 
-_DEPS = atom.cuh distance.h graph.h rotation.cuh rotamer.cuh helper.h
+_DEPS = atom.cuh distance.h graph.h rotation.cuh rotamer.cuh helper.h utils.h
 DEPS = $(patsubst %,$(SRCDIR)/%,$(_DEPS))
 
 _OBJ = distance.o graph.o rotation.o rotamer.o main.o
