@@ -75,11 +75,6 @@ __global__ void compute_unit_quaternions(double4* res, double3 quaternion){
 void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     std::vector<Rotamer> rotamers;
     std::vector<atom_st> atoms;
-    
-    max_value max_first_half;
-    max_first_half.distance = 0;
-    max_value max_second_half;
-    max_second_half.distance = 0;
 
     // Initialize the graph.
     Graph graph = Graph(mol->getNumAtoms());
@@ -168,12 +163,12 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
         for(auto i: first_half)  atoms_first_half.push_back(atoms[i]);
         
         for(auto i : second_half) atoms_second_half.push_back(atoms[i]);
-        /*
+        
         max_value max_first_half;
         max_first_half.distance = 0;
         max_value max_second_half;
         max_second_half.distance = 0;
-        */
+        
 
         Rotation r;
 
