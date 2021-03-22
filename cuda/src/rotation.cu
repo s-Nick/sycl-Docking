@@ -228,6 +228,8 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
         result_to_return.push_back(tmp);
         tmp.clear();
     }
+    tmp.clear();
+    vector<atom_st>().swap(tmp);
 
     checkCuda( cudaFreeHost(h_res), __LINE__);
     checkCuda( cudaFree(d_res),__LINE__ );
