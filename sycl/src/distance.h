@@ -6,7 +6,7 @@
 
 using namespace std;
 
-double *distance(vector<atom_st> atoms, int num, int num_of_block);
+double *distance(vector<atom_st> atoms, int num, int num_of_block, cl::sycl::queue& queue_gpu);
 
 #undef DISTANCE_H_
 #endif

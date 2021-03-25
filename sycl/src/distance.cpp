@@ -12,7 +12,7 @@ using namespace std;
 
 class distance;
 
-double* distance(vector<atom_st> atoms, int number_of_atoms, int num_of_block){
+double* distance(vector<atom_st> atoms, int number_of_atoms, int num_of_block, cl::sycl::queue& queue_gpu){
 
     //SYCL error handler similar to checkCuda, but lambda fun
     auto exception_handler = [](cl::sycl::exception_list exceptions)
@@ -31,8 +31,8 @@ double* distance(vector<atom_st> atoms, int number_of_atoms, int num_of_block){
         }
     };
     
-    cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
-    cl::sycl::queue queue_gpu(gpu, exception_handler, cl::sycl::property::queue::in_order());
+    //cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
+    //cl::sycl::queue queue_gpu(gpu, exception_handler, cl::sycl::property::queue::in_order());
     
     int size_of_atoms = number_of_atoms*sizeof(atom_st);
     // TODO: distance is useful only on the device, so initiate only in device memory as d_distance

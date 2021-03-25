@@ -8,7 +8,11 @@ class Rotation
 {
 
 public:
-    std::vector<std::vector<atom_st>> rotate(int angle, std::vector<atom_st> &atoms, cl::sycl::double3 &passingPoint, cl::sycl::double4 *unit_quaternion);
+    std::vector<std::vector<atom_st>> rotate(int angle, 
+                                            std::vector<atom_st> &atoms, 
+                                            cl::sycl::double3 &passingPoint, 
+                                            cl::sycl::double4 *unit_quaternion,
+                                            cl::sycl::queue& q_gpu);
 };
 
 #endif

@@ -43,25 +43,26 @@ struct max_value
 
 class computeQuaternions;
 //SYCL function to compute unit_quaternions on gpu and return them.
-void computeUnitQuaternions(cl::sycl::double4* results, cl::sycl::double3  rt_vector){
+void computeUnitQuaternions(cl::sycl::double4* gpu_result, cl::sycl::double3  rt_vector, cl::sycl::queue& q_gpu){
 
     {
-        cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
-        cl::sycl::queue q(gpu);
+        //cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
+        //cl::sycl::queue q_gpu(gpu);
 
-        cl::sycl::double4 *gpu_result = 
-            cl::sycl::malloc_shared<cl::sycl::double4>(360*sizeof(cl::sycl::double4),q);
+        //cl::sycl::double4 *gpu_result = 
+        //    cl::sycl::malloc_shared<cl::sycl::double4>(360*sizeof(cl::sycl::double4),q_gpu);
 
         //Check if allocate enough memory
         //cl::sycl::double3 gpu_rt_vector;
         cl::sycl::double3* gpu_rt_vector =
-            cl::sycl::malloc_shared<cl::sycl::double3>(sizeof(cl::sycl::double3),q);
+            cl::sycl::malloc_shared<cl::sycl::double3>(sizeof(cl::sycl::double3),q_gpu);
         
         //Initialize gpu_rt_vector copying the data from cpu memory
         gpu_rt_vector->x() = rt_vector.x();
         gpu_rt_vector->y() = rt_vector.y();
         gpu_rt_vector->z() = rt_vector.z();
         
+
         /*
         for(int i = 0; i < rt_vector.get_size(); i++){
             gpu_rt_vector[i] = rt_vector[i];
@@ -69,43 +70,40 @@ void computeUnitQuaternions(cl::sycl::double4* results, cl::sycl::double3  rt_ve
         }
         */
         
-
-        //q.submit([=] (cl::sycl::handler & cgh){
-            //cl::sycl::stream out(2048, 256, cgh);
-            q.parallel_for<class computeQuaternions>(360, [=](cl::sycl::id<1> tid){
-                //cl::sycl::double3 norm;
-                double norm;
-                double x, y, z;
-                double angle;
-                double sin_2, cos_2;
-                
-                //TEMPORARY SOLUTION TO FIX MEMORY
-                //cl::sycl::double3 gpu_rt_vector = gpu_rt_vector_shared[0];
-                
-                double x_tmp_2, y_tmp_2, z_tmp_2;
-                norm = cl::sycl::length(cl::sycl::double3(gpu_rt_vector->x(),
-                                                    gpu_rt_vector->y(),gpu_rt_vector->z()));
+        q_gpu.parallel_for<class computeQuaternions>(360, [=](cl::sycl::id<1> tid){
+            //cl::sycl::double3 norm;
+            double norm;
+            double x, y, z;
+            double angle;
+            double sin_2, cos_2;
+            
+            //TEMPORARY SOLUTION TO FIX MEMORY
+            //cl::sycl::double3 gpu_rt_vector = gpu_rt_vector_shared[0];
+            
+            double x_tmp_2, y_tmp_2, z_tmp_2;
+            norm = cl::sycl::length(cl::sycl::double3(gpu_rt_vector->x(),
+                                                gpu_rt_vector->y(),gpu_rt_vector->z()));
 
 
 
-                if(tid < 360){
-                    x = gpu_rt_vector->x()/norm;
-                    y = gpu_rt_vector->y()/norm;
-                    z = gpu_rt_vector->z()/norm;
-                    angle = M_PI/180 * tid;
-                    sin_2 = cl::sycl::sin(angle/2);
-                    cos_2 = cl::sycl::cos(angle/2);
-                    gpu_result[tid] = cl::sycl::double4{x*sin_2 , y*sin_2, z*sin_2, cos_2};
-                }
-            }).wait();
-        //}).wait();
+            if(tid < 360){
+                x = gpu_rt_vector->x()/norm;
+                y = gpu_rt_vector->y()/norm;
+                z = gpu_rt_vector->z()/norm;
+                angle = M_PI/180 * tid;
+                sin_2 = cl::sycl::sin(angle/2);
+                cos_2 = cl::sycl::cos(angle/2);
+                gpu_result[tid] = cl::sycl::double4{x*sin_2 , y*sin_2, z*sin_2, cos_2};
+            }
+        }).wait();
+        
 
-        for(int i = 0; i < 360; i++){
-            results[i] = gpu_result[i];
-        }
+        //for(int i = 0; i < 360; i++){
+        //    results[i] = gpu_result[i];
+        //}
 
-        cl::sycl::free(gpu_rt_vector,q);
-        cl::sycl::free(gpu_result,q);
+        cl::sycl::free(gpu_rt_vector,q_gpu);
+        //cl::sycl::free(gpu_result,q_gpu);
     }
     return;
 
@@ -122,6 +120,22 @@ int main(int argc, char **argv)
     std::string mol_file = argv[1];
     char* mol_number_string = argv[2];
 
+    //SYCL error handler similar to checkCuda, but lambda fun
+    auto exception_handler = [](cl::sycl::exception_list exceptions)
+    {
+        for (std::exception_ptr const &e : exceptions)
+        {
+            try
+            {
+                std::rethrow_exception(e);
+            }
+            catch (cl::sycl::exception const &e)
+            {
+                std::cout << "Caught asynchronous SYCL exception:\n"
+                          << e.what() << std::endl;
+            }
+        }
+    };
 
     std::vector<Rotamer> rotamers;
     std::vector<atom_st> atoms;
@@ -158,6 +172,9 @@ int main(int argc, char **argv)
 
     auto total_start = std::chrono::high_resolution_clock::now();
 
+    //Create the queue for the device in order to have the same context
+    cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
+    cl::sycl::queue q_gpu(gpu,exception_handler);
 
     for(auto mol : molecules){
         // Initialize the graph.
@@ -226,7 +243,11 @@ int main(int argc, char **argv)
             atoms.push_back(at);
         }
 
-        
+        max_value max_first_half;
+        max_first_half.distance = 0;
+        max_value max_second_half;
+        max_second_half.distance = 0;
+            
 
         vector<unsigned int> first_half;
         vector<unsigned int> second_half;
@@ -254,11 +275,12 @@ int main(int argc, char **argv)
             for (auto i : second_half)
                 atoms_second_half.push_back(atoms[i]);
 
+            /*
             max_value max_first_half;
             max_first_half.distance = 0;
             max_value max_second_half;
             max_second_half.distance = 0;
-
+            */
             Rotation r;
 
             // If the bond split, create one half with only one atom. The bond is not a rotamer,
@@ -275,9 +297,11 @@ int main(int argc, char **argv)
                 
                 cl::sycl::double3 tmp_vector = rt.getVector();
                 
-                cl::sycl::double4* unit_quaternions = (cl::sycl::double4*)malloc(360*sizeof(cl::sycl::double4));
+                //cl::sycl::double4* unit_quaternions = (cl::sycl::double4*)malloc(360*sizeof(cl::sycl::double4));
 
-                computeUnitQuaternions(unit_quaternions,tmp_vector);
+                cl::sycl::double4* unit_quaternions = cl::sycl::malloc_shared<cl::sycl::double4>(sizeof(cl::sycl::double4)*NUM_OF_BLOCKS, q_gpu);
+
+                computeUnitQuaternions(unit_quaternions, tmp_vector, q_gpu);
                 /*
                 //DEBUG PRINTING
                 for(int i = 0; i < NUM_OF_BLOCKS; i++){
@@ -300,7 +324,7 @@ int main(int argc, char **argv)
                     cl::sycl::double3 tmp = rt.getBeginAtom().position;
 
                     // Compute the rotation and storing the result
-                    rot_first_half = r.rotate(c, atoms_first_half, tmp, unit_quaternions);
+                    rot_first_half = r.rotate(c, atoms_first_half, tmp, unit_quaternions, q_gpu);
                     
                     
                     // Add all the element of the vector of vectors in a single vector with all the atoms.
@@ -319,7 +343,7 @@ int main(int argc, char **argv)
                     }
                     
                     // Compute the internal distance, storing the result in res.
-                    res = distance(distance_to_compute, atoms.size(), NUM_OF_BLOCKS);
+                    res = distance(distance_to_compute, atoms.size(), NUM_OF_BLOCKS, q_gpu);
 
                     
 
@@ -344,7 +368,8 @@ int main(int argc, char **argv)
                 printf("the max distance compute is %lf with angle %d around rotamer: %d\n",
                     max_first_half.distance, max_first_half.angle, max_first_half.rt.getBond().getIdx());
 
-                std::free(unit_quaternions);
+                cl::sycl::free(unit_quaternions,q_gpu);
+                //std::free(unit_quaternions);
                 std::free(res);
                 /*
                 {//SYCL buffer scope for unit_quaternions
@@ -391,10 +416,10 @@ int main(int argc, char **argv)
 
         std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << std::endl;
 
-        printf("The maximum distance computed is %lf\n", max_dist.distance);
+        printf("The maximum distance computed is %lf\n", max_first_half.distance);
 
         printf("Computed with an angle of %d, around the rotamer %d\n", 
-            max_dist.angle, max_dist.rt.getBond().getIdx());
+            max_first_half.angle, max_first_half.rt.getBond().getIdx());
 
         rotamers.clear();
         atoms.clear();
