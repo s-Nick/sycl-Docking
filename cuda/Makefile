@@ -1,6 +1,6 @@
 NAME	= Cuda-Docking
 CC	= nvcc
-CFLAGS	= -I${RDBASE}/Code -L${RDBASE}/External -I${BOOST_ROOT}/include -L${BOOST_ROOT}/lib -L${RDBASE}/lib -I ${CUDA_BASE_DIR}/include -L ${CUDA_BASE_DIR}/lib64 -std=c++11 -O3 -I /src/
+CFLAGS	= -ccbin=g++-11 -I${RDBASE}/Code -L${RDBASE}/External -I${BOOST_ROOT}/include -L${BOOST_ROOT}/lib -L${RDBASE}/lib -I ${CUDA_BASE_DIR}/include -L ${CUDA_BASE_DIR}/lib64 -std=c++11 -O3 -I /src/
 LDFLAGS	= -lRDKitChemReactions -lRDKitFileParsers -lRDKitSmilesParse -lRDKitDepictor  -lRDKitSubstructMatch -lRDKitGraphMol -lRDKitDataStructs -lRDKitRDGeometryLib -lRDKitRDGeneral 
 
 OBJDIR = obj/
