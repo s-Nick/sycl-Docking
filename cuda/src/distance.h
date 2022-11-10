@@ -4,9 +4,7 @@
 #include <vector>
 #include "atom.cuh"
 
-using namespace std;
-
-double* distance_v3(vector<atom_st> atoms, int num, int num_of_block);
+double* distance_v3(std::vector<atom_st> atoms, int num, int num_of_block);
 
 
 #endif
