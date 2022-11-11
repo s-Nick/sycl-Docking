@@ -79,8 +79,9 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     
     auto conf = mol->getConformer();
     
+    #ifndef NDEBUG
     std::cout << "number of bonds: " << mol->getNumBonds() << '\n';// mol2->getNumBonds() << '\n';
-
+    #endif
     if( !mol->getRingInfo()->isInitialized() ) {
         RDKit::MolOps::findSSSR( *mol );
     }
@@ -102,13 +103,18 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
         startingAtom = bond->getBeginAtomIdx();
         endingAtom = bond->getEndAtomIdx();
         graph.addEdge(startingAtom,endingAtom);
+        
         if( mol->getRingInfo()->numBondRings( bond->getIdx() )) {
             //continue;
+            #ifndef NDEBUG
             std::cout <<  "Bond " << bond->getIdx() << " is in a ring " << "stAtom: " << startingAtom << " endAtom: " << endingAtom << "\n";
+            #endif
         }
         else if(bond->getBondType() == RDKit::Bond::BondType::DOUBLE){
             //continue;
+            #ifndef NDEBUG
             std::cout <<  "Bond " << bond->getIdx() << " is a DOUBLE bond " << "stAtom: " << startingAtom << " endAtom: " << endingAtom << "\n";
+            #endif
         }
         else{
             unsigned int id = bond->getIdx();
@@ -172,10 +178,11 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
         if(atoms_first_half.size() > 1 && second_half.size() > 1){
             
             analize = true;
+            #ifndef NDEBUG
             std::cout << "Checking rotamer: " << rt.getBond().getIdx() << " ";
             std::cout << "Starting Atom: " << rt.getBeginAtom().id << " Ending Atom: " << rt.getEndingAtom().id << " ";
-
             std::cout << "number of atom in first half: " << atoms_first_half.size() << "\n";
+            #endif
 
             std::vector<atom_st> distance_to_compute;
             double4* unit_quaternions;
@@ -195,8 +202,7 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
             compute_unit_quaternions<<<1,360>>>(unit_quaternions,tmp_vector);
 
             cudaDeviceSynchronize();
-            
-            
+
             double max = 0;
             double* res = nullptr;
             
@@ -243,18 +249,20 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
 
             }
 
-
+            #ifndef NDEBUG
             printf("Computed distance for the first part,\n");
             printf("the max distance compute is %lf with angle %d around rotamer: %d\n", \
                     max_first_half.distance, max_first_half.angle,max_first_half.rt.getBond().getIdx());
-            
+            #endif
             cudaFree(unit_quaternions);
             cudaFree(res);
         }
         else{
             analize = false;
+            #ifndef NDEBUG
             printf("Checking rotamer %d ... ", rt.getBond().getIdx());
             printf("Too few atoms in the partition, rotamer not analized\n");
+            #endif
         }
 
         double total = max_first_half.distance + max_second_half.distance;
@@ -273,10 +281,13 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
 
         // Adding again the edge corresponding to the bond, before computing another bond/rotamer.
         graph.addEdge(rt.getBeginAtom().id,rt.getEndingAtom().id);
-        if(analize)
+        
+        #ifndef NDEBUG
+        if(analize) {
             printf("For Rotamer %d, the max distance computed is: %lf,\n with a first angle: %d \n",\
                 rt.getBond().getIdx(),total,max_first_half.angle);
-
+        }
+        #endif
     }
 
     auto stop = std::chrono::high_resolution_clock::now();
@@ -302,6 +313,9 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
  **/
 int main(int argc, char** argv){
 
+    if (argc < 2) {
+        return 1;
+    }
     std::string mol_file = argv[1];
     char* mol_number_string = argv[2];
     //std::vector<Rotamer> rotamers;
@@ -309,10 +323,6 @@ int main(int argc, char** argv){
     //RWMol *m = Mol2FileToMol( mol_file );
     //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,true,false,CORINA,false ) );
 
-    /**
-     * The following initialization works with the aspirin's mol2 file provided by the Professor.
-     * The declaration above works only with the file found online.
-     */
     //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,false,true,CORINA,false ) );
     /**The next Line read the molecule removing the H atoms, it reduce the number of possible rotors
      *  for the aspirin and it seems to work, but idk with others molecules, so for now I keep
@@ -342,8 +352,9 @@ int main(int argc, char** argv){
 
     auto total_start = std::chrono::high_resolution_clock::now();
 
-    std::cout << molecules.size() << "\n";
-    
+    #ifndef NDEBUG 
+    std::cout << "molecules size " << molecules.size() << "\n";
+    #endif
     
     for(auto mol : molecules){
         analyzeMolecule(max_dist, mol);
