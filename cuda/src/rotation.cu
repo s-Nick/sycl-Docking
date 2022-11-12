@@ -193,12 +193,12 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
         atoms[i] = at;
         i++;
     }
-    
+
     checkCuda( cudaMemPrefetchAsync(atoms,size_of_atoms, deviceId), __LINE__);
     
     double3 passingPoint = pp;
     
-    first_translation<<<1,number_of_atoms>>>(atoms,passingPoint, number_of_atoms);
+    first_translation<<<1,256>>>(atoms,passingPoint, number_of_atoms);
 
     checkCuda( cudaDeviceSynchronize(), __LINE__);
     checkCuda( cudaMemPrefetchAsync(unit_quaternion,360*sizeof(double4), deviceId) ,__LINE__);
@@ -218,8 +218,8 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
     
     checkCuda( cudaFree(atoms), __LINE__ );
     
-    vector<vector<atom_st>> result_to_return;
-    vector<atom_st> tmp;
+    std::vector<std::vector<atom_st>> result_to_return;
+    std::vector<atom_st> tmp;
     //copy the results in order to free the memory and to pass the result to other functions for further usage
     for(int i = 0; i < NUM_OF_BLOCKS; i++ ){
         for(int c = atoms_st.size()*i; c < atoms_st.size()*(i+1); c++){
@@ -229,7 +229,7 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
         tmp.clear();
     }
     tmp.clear();
-    vector<atom_st>().swap(tmp);
+    std::vector<atom_st>().swap(tmp);
 
     checkCuda( cudaFreeHost(h_res), __LINE__);
     checkCuda( cudaFree(d_res),__LINE__ );

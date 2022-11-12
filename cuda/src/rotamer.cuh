@@ -22,11 +22,11 @@ public:
             atom_st &beginAtom,
             atom_st &endAtom);
 
-    RDKit::Bond getBond();
+    RDKit::Bond getBond() const ;
 
-    atom_st getBeginAtom();
-    atom_st getEndingAtom();
-    double3 getVector();
+    atom_st getBeginAtom() const;
+    atom_st getEndingAtom() const;
+    double3 getVector() const;
 
 private:
     RDKit::Bond bond;
