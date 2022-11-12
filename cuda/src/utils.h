@@ -99,8 +99,9 @@ void singleMoleculeRead(std::ifstream& molFileStream,
     //auto tmp = molecules[3]->getProp<std::string>("_Name");
     //auto s = mol->getProp<std::string>("_Name");
     auto tmp = molecules.size();
+    #ifndef NDEBUG
     std::cout << tmp << std::endl;
-
+    #endif
 
     return;
 }
