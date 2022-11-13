@@ -62,9 +62,9 @@ void singleMoleculeRead(std::ifstream& molFileStream,
         std::fstream molStream;
         molStream.open("tmpdata.mol2", std::ios::out);
         getline(molFileStream, line);
-        std::cout << line << " " << __LINE__ << std::endl;
+        //std::cout << line << std::endl;
         if(line.compare("@<TRIPOS>MOLECULE")){
-            std::cout << line << " at line " << __LINE__ << std::endl;
+            //std::cout << line << " at line " << __LINE__ << std::endl;
             std::streampos mol_init = molFileStream.tellg();
             ss << line;
             ss <<'\n'; 
@@ -84,7 +84,7 @@ void singleMoleculeRead(std::ifstream& molFileStream,
             std::fstream molStream;
             molStream.open("tmpdata.mol2", std::ios::in);
             //std::cout << molStream.rdbuf() << std::endl;
-            std::shared_ptr<RDKit::ROMol> mol(RDKit::Mol2DataStreamToMol(molStream, false,true, RDKit::CORINA, false));
+            std::shared_ptr<RDKit::ROMol> const mol(RDKit::Mol2DataStreamToMol(molStream, false,true, RDKit::CORINA, false));
             molecules.push_back(mol);
             if(line == "\0")
                 break;
@@ -99,9 +99,8 @@ void singleMoleculeRead(std::ifstream& molFileStream,
     //auto tmp = molecules[3]->getProp<std::string>("_Name");
     //auto s = mol->getProp<std::string>("_Name");
     auto tmp = molecules.size();
-    #ifndef NDEBUG
     std::cout << tmp << std::endl;
-    #endif
+
 
     return;
 }

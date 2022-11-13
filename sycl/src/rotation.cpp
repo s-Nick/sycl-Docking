@@ -24,7 +24,8 @@ class translation;
  **/
 std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_st> &atoms_st,
                                                    cl::sycl::double3 &pp, 
-                                                   cl::sycl::double4 *unit_quaternion){
+                                                   cl::sycl::double4 *d_unit_quaternion,
+                                                   cl::sycl::queue& q_gpu){
 
     //SYCL error handler similar to checkCuda, but lambda fun
     auto exception_handler = [](cl::sycl::exception_list exceptions)
@@ -48,8 +49,8 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
 
    
     //cl::sycl::device gpu =cl::sycl::host_selector{}.select_device();
-    cl::sycl::device gpu =cl::sycl::gpu_selector{}.select_device();
-    cl::sycl::queue q_gpu(gpu, exception_handler);
+    //cl::sycl::device gpu =cl::sycl::gpu_selector{}.select_device();
+    //cl::sycl::queue q_gpu(gpu, exception_handler);
 
     //std::cout << gpu.get_info<cl::sycl::info::device::vendor>() << std::endl;
 
@@ -57,18 +58,20 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
 
     atom_st* atoms = cl::sycl::malloc_shared<atom_st>(size_of_atoms,q_gpu);
 
-    atom_st *h_res = cl::sycl::malloc_host<atom_st>(size_of_atoms * NUM_OF_BLOCKS, q_gpu);
-    atom_st *d_res = cl::sycl::malloc_device<atom_st>(size_of_atoms * NUM_OF_BLOCKS, q_gpu);
+    //atom_st *h_res = cl::sycl::malloc_host<atom_st>(size_of_atoms * NUM_OF_BLOCKS*number_of_atoms, q_gpu);
+    //atom_st *d_res = cl::sycl::malloc_device<atom_st>(size_of_atoms * NUM_OF_BLOCKS*number_of_atoms, q_gpu);
 
-    cl::sycl::double4* d_unit_quaternion = cl::sycl::malloc_shared<cl::sycl::double4>(sizeof(cl::sycl::double4)*NUM_OF_BLOCKS, q_gpu);
+    atom_st *res = cl::sycl::malloc_shared<atom_st>(size_of_atoms * NUM_OF_BLOCKS*number_of_atoms, q_gpu);
 
+    //cl::sycl::double4* d_unit_quaternion = cl::sycl::malloc_shared<cl::sycl::double4>(sizeof(cl::sycl::double4)*NUM_OF_BLOCKS, q_gpu);
+    /*
     //initialize d_unit_quaternion
     for(int c = 0; c < NUM_OF_BLOCKS; c++){
         for(int i = 0; i < 4 ; i++){
             d_unit_quaternion[c][i] = unit_quaternion[c][i];
         }
     }
-    
+    */
     //q_gpu.memcpy(d_unit_quaternion, unit_quaternion, sizeof(unit_quaternion) );
     
 
@@ -90,8 +93,8 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         passingPoint[i] = pp[i];
     }*/
     
-    q_gpu.memcpy(passingPoint,&pp,sizeof(cl::sycl::double3));
-    q_gpu.wait();
+    //q_gpu.memcpy(passingPoint,&pp,sizeof(cl::sycl::double3));
+    //q_gpu.wait();
     {//SYCL buffer scope
 
         
@@ -112,7 +115,7 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
             
             //cl::sycl::range<1> translation_thread_number{64};
 
-            q_gpu.parallel_for<class translation>(cl::sycl::nd_range<1>(64,64),
+            q_gpu.parallel_for<class translation>(cl::sycl::nd_range<1>(128,128),
                                              [=](cl::sycl::nd_item<1>it){           
                 //int bid = it.get_group().get_id();
                 
@@ -130,7 +133,7 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
 
             });// End tranlsation parallel_for
         //}); // end translation submit
-        q_gpu.wait();
+        //q_gpu.wait();
         //std::cout << "rotation line " << __LINE__ << std::endl;
         //translation_s.wait();
         
@@ -149,8 +152,8 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
             // NEEDED FOR DEBUGGING
             //cl::sycl::stream out(2048, 256, h);
 
-            cl::sycl::range<1> global {NUM_OF_BLOCKS*64};
-            cl::sycl::range<1> local {64};
+            cl::sycl::range<1> global {NUM_OF_BLOCKS*128};
+            cl::sycl::range<1> local {128};
 
             cl::sycl::range<2> rot_matrix_range(3,3);
 
@@ -203,17 +206,17 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
                     int tmp = bid+1;
                     if(index < number_of_atoms*tmp && number_of_atoms*bid <= index ){
                         
-                        d_res[index].atom_id = atoms[tidx].atom_id;
+                        res[index].atom_id = atoms[tidx].atom_id;
 
-                        d_res[index].position.x() = atoms[tidx].position.x() * rot_matrix_acc[0][0] + \
+                        res[index].position.x() = atoms[tidx].position.x() * rot_matrix_acc[0][0] + \
                                                 atoms[tidx].position.y() * rot_matrix_acc[0][1] + \
                                                 atoms[tidx].position.z() * rot_matrix_acc[0][2] + passingPoint->x();
 
-                        d_res[index].position.y() = atoms[tidx].position[0] * rot_matrix_acc[1][0] + \
+                        res[index].position.y() = atoms[tidx].position[0] * rot_matrix_acc[1][0] + \
                                                 atoms[tidx].position[1] * rot_matrix_acc[1][1] + \
                                                 atoms[tidx].position[2] * rot_matrix_acc[1][2] + passingPoint->y();
 
-                        d_res[index].position.z() = atoms[tidx].position[0] * rot_matrix_acc[2][0] + \
+                        res[index].position.z() = atoms[tidx].position[0] * rot_matrix_acc[2][0] + \
                                                 atoms[tidx].position[1] * rot_matrix_acc[2][1] + \
                                                 atoms[tidx].position[2] * rot_matrix_acc[2][2] + passingPoint->z();
                     }
@@ -231,8 +234,8 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         }
         
         //std::cout << "rotation line " << __LINE__ << std::endl;
-        q_gpu.memcpy(h_res, d_res, size_of_atoms * NUM_OF_BLOCKS*number_of_atoms);
-        q_gpu.wait();
+        //q_gpu.memcpy(h_res, d_res, size_of_atoms * NUM_OF_BLOCKS*number_of_atoms);
+        //q_gpu.wait();
     }// SYCL BUFFER Scope
     
     std::vector<std::vector<atom_st>> result_to_return;
@@ -244,7 +247,8 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
     //copy the results in order to free the memory and to pass the result to other functions for further usage
     for (int i = 0; i < NUM_OF_BLOCKS; i++){
         for (int c = atoms_st.size() * i; c < atoms_st.size() * (i + 1); c++){
-            tmp.push_back(h_res[c]);
+            //tmp.push_back(h_res[c]);
+            tmp.push_back(res[c]);
         }
         result_to_return.push_back(tmp);
         tmp.clear();
@@ -268,10 +272,11 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
 
     //free memory allocated using sycl::malloc
     cl::sycl::free(passingPoint,q_gpu);
-    cl::sycl::free(d_unit_quaternion,q_gpu);
+    //cl::sycl::free(d_unit_quaternion,q_gpu);
     cl::sycl::free(atoms,q_gpu);
-    cl::sycl::free(d_res,q_gpu);
-    cl::sycl::free(h_res,q_gpu);
+    //cl::sycl::free(d_res,q_gpu);
+    //cl::sycl::free(h_res,q_gpu);
+    cl::sycl::free(res,q_gpu);
     
     return result_to_return;
 }

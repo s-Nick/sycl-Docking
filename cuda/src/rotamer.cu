@@ -42,27 +42,27 @@ double3 Rotamer::ComputeVector(atom_st &startingAtom, atom_st &endAtom){
 /**
  * Return the bond corresponding to this rotamer.
  **/
-RDKit::Bond Rotamer::getBond(){
+RDKit::Bond Rotamer::getBond() const {
     return bond;
 }
 
 /**
  * Return the atom at the begin of the rotamer.
  **/ 
-atom_st Rotamer::getBeginAtom(){
+atom_st Rotamer::getBeginAtom() const{
     return beginAtom;
 }
 
 /**
  * Return the atom at the end of the rotamer.
  **/
-atom_st Rotamer::getEndingAtom(){
+atom_st Rotamer::getEndingAtom() const {
     return endAtom;
 }
 
 /**
  * Return the computed vector of the corresponding bond. 
  **/
-double3 Rotamer::getVector(){
+double3 Rotamer::getVector() const{
     return vector;
 }

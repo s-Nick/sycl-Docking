@@ -26,7 +26,6 @@
 #define NUM_OF_BLOCKS 360
 
 using namespace RDKit;
-using namespace std;
 
 /**
  * Struct used to keep track of the max result found.
@@ -53,13 +52,12 @@ __global__ void compute_unit_quaternions(double4* res, double3 quaternion){
 
     int tid = threadIdx.x;// + blockIdx.x*gridDim.x;
 
-    double norm;
     double x , y ,z;
     double angle;
     double sin_2 , cos_2;
 
     //compute the norm of the vector.
-    norm = norm3d(quaternion.x, quaternion.y,quaternion.z);
+    double norm = norm3d(quaternion.x, quaternion.y,quaternion.z);
     if(tid < 360){
         x = quaternion.x/norm;
         y = quaternion.y/norm;
@@ -81,8 +79,9 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     
     auto conf = mol->getConformer();
     
+    #ifndef NDEBUG
     std::cout << "number of bonds: " << mol->getNumBonds() << '\n';// mol2->getNumBonds() << '\n';
-
+    #endif
     if( !mol->getRingInfo()->isInitialized() ) {
         RDKit::MolOps::findSSSR( *mol );
     }
@@ -94,45 +93,42 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     // Get all the Bond in the mol and add the valid ones to the rotamers' vector.
     // Since the Bond in rings and the Double bond are not considerated useful for
     // the rotation, it discards them.
+    auto conv_to_double3 = [](const RDGeom::Point3D& pos) {
+        return make_double3(pos[0], pos[1], pos[2]);
+    };
+
     for( unsigned int i = 0; i < mol->getNumBonds() ; i++ ) {
         const RDKit::Bond *bond = mol->getBondWithIdx( i );
         unsigned int startingAtom, endingAtom;
         startingAtom = bond->getBeginAtomIdx();
         endingAtom = bond->getEndAtomIdx();
         graph.addEdge(startingAtom,endingAtom);
+        
         if( mol->getRingInfo()->numBondRings( bond->getIdx() )) {
             //continue;
-            std::cout <<  "Bond " << bond->getIdx() << " is in a ring " << "stAtom: " << startingAtom << " endAtom: " << endingAtom << endl;
+            #ifndef NDEBUG
+            std::cout <<  "Bond " << bond->getIdx() << " is in a ring " << "stAtom: " << startingAtom << " endAtom: " << endingAtom << "\n";
+            #endif
         }
         else if(bond->getBondType() == RDKit::Bond::BondType::DOUBLE){
             //continue;
-            std::cout <<  "Bond " << bond->getIdx() << " is a DOUBLE bond " << "stAtom: " << startingAtom << " endAtom: " << endingAtom << endl;
+            #ifndef NDEBUG
+            std::cout <<  "Bond " << bond->getIdx() << " is a DOUBLE bond " << "stAtom: " << startingAtom << " endAtom: " << endingAtom << "\n";
+            #endif
         }
         else{
             unsigned int id = bond->getIdx();
-            atom_st beginAtom;
-            atom_st endAtom;
-            beginAtom.id = startingAtom;
-            endAtom.id = endingAtom;
-            auto tmp_pos = conf.getAtomPos(beginAtom.id);
-            beginAtom.position = make_double3(tmp_pos[0],tmp_pos[1],tmp_pos[2]);
-            tmp_pos = conf.getAtomPos(endAtom.id);
-            endAtom.position = make_double3(tmp_pos[0],tmp_pos[1],tmp_pos[2]);
-            Rotamer rt = Rotamer(*bond,id, beginAtom, endAtom);
-            rotamers.push_back(rt);
+            atom_st beginAtom{startingAtom, conv_to_double3(conf.getAtomPos(startingAtom))} ;
+            atom_st endAtom{endingAtom, conv_to_double3(conf.getAtomPos(endingAtom))};
+            rotamers.push_back(Rotamer(*bond,id, beginAtom, endAtom));
         }
     }
 
 
     // Add all the atoms to the atoms' vector
     for(auto atom : mol->atoms()){
-        uint id = atom->getIdx();
-        auto pos_tmp = conf.getAtomPos(id);
-        double3 pos = make_double3(pos_tmp[0],pos_tmp[1],pos_tmp[2]);
-        atom_st at;
-        at.id = id;
-        at.position = pos;
-        atoms.push_back(at);
+        const uint id = atom->getIdx();
+        atoms.push_back(atom_st{id,conv_to_double3(conf.getAtomPos(id))});
     }
 
     //Initialize the result storing structure.
@@ -145,8 +141,8 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
     max_value max_second_half;
     max_second_half.distance = 0;
 
-    vector<unsigned int> first_half;
-    vector<unsigned int> second_half;
+    std::vector<unsigned int> first_half;
+    std::vector<unsigned int> second_half;
     //Rotamer rt = rotamers[0];
     //vector<Rotamer> tmp_rotamers ={rotamers[0], rotamers[1]};
     auto start = std::chrono::high_resolution_clock::now();
@@ -162,8 +158,8 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
         graph.DFSlinkedNode(rt.getBeginAtom().id, first_half);
         graph.DFSlinkedNode(rt.getEndingAtom().id, second_half);
 
-        vector<atom_st> atoms_first_half;
-        vector<atom_st> atoms_second_half;
+        std::vector<atom_st> atoms_first_half;
+        std::vector<atom_st> atoms_second_half;
         
         for(auto i: first_half)  atoms_first_half.push_back(atoms[i]);
         
@@ -182,12 +178,13 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
         if(atoms_first_half.size() > 1 && second_half.size() > 1){
             
             analize = true;
-            cout << "Checking rotamer: " << rt.getBond().getIdx() << " ";
-            cout << "Starting Atom: " << rt.getBeginAtom().id << " Ending Atom: " << rt.getEndingAtom().id << " ";
+            #ifndef NDEBUG
+            std::cout << "Checking rotamer: " << rt.getBond().getIdx() << " ";
+            std::cout << "Starting Atom: " << rt.getBeginAtom().id << " Ending Atom: " << rt.getEndingAtom().id << " ";
+            std::cout << "number of atom in first half: " << atoms_first_half.size() << "\n";
+            #endif
 
-            cout << "number of atom in first half: " << atoms_first_half.size() << endl;
-
-            vector<atom_st> distance_to_compute;
+            std::vector<atom_st> distance_to_compute;
             double4* unit_quaternions;
 
             cudaMallocManaged(&unit_quaternions, 360*sizeof(double4));
@@ -206,13 +203,12 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
 
             cudaDeviceSynchronize();
             
-            
             double max = 0;
-            double* res;
+            double* res = nullptr;
             
             for(int c = 0; c < 360; c += NUM_OF_BLOCKS ){
                 
-                vector<vector<atom_st>> rot_first_half;
+                std::vector<std::vector<atom_st>> rot_first_half;
                 
                 double3 tmp = rt.getBeginAtom().position;
 
@@ -222,7 +218,7 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
                 // Add all the element of the vector of vectors in a single vector with all the atoms.
                 // The atoms are in order of angle of rotation and every time is added the missing atoms
                 // of the second half of the molecule, in order to compute the internal distance.
-                for(int rotation = 0; rotation < NUM_OF_BLOCKS; rotation++){
+                for(int rotation = 0; rotation < NUM_OF_BLOCKS; ++rotation){
                     //cout << "main line " << __LINE__ << endl;
                     for(int i = 0; i < atoms_first_half.size(); i++){
                         distance_to_compute.push_back(rot_first_half[rotation][i]);
@@ -238,7 +234,7 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
                 
                 // Select the rotation that has the highest internal distance,
                 // cycling through the results stored in res. 
-                for(int i = 0; i < NUM_OF_BLOCKS;i++){
+                for(int i = 0; i < NUM_OF_BLOCKS; ++i) {
                     if(res[i] > max_first_half.distance) {
                         max_first_half.distance = res[i];
                         max_first_half.angle = c+i;
@@ -246,25 +242,27 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
                     }
                 }
                 distance_to_compute.clear();
-                vector<atom_st>().swap(distance_to_compute);
+                std::vector<atom_st>().swap(distance_to_compute);
 
                 rot_first_half.clear();
-                vector<vector<atom_st>>().swap(rot_first_half);
+                std::vector<std::vector<atom_st>>().swap(rot_first_half);
 
             }
 
-
+            #ifndef NDEBUG
             printf("Computed distance for the first part,\n");
             printf("the max distance compute is %lf with angle %d around rotamer: %d\n", \
                     max_first_half.distance, max_first_half.angle,max_first_half.rt.getBond().getIdx());
-            
+            #endif
             cudaFree(unit_quaternions);
             cudaFree(res);
         }
         else{
             analize = false;
+            #ifndef NDEBUG
             printf("Checking rotamer %d ... ", rt.getBond().getIdx());
             printf("Too few atoms in the partition, rotamer not analized\n");
+            #endif
         }
 
         double total = max_first_half.distance + max_second_half.distance;
@@ -283,19 +281,23 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
 
         // Adding again the edge corresponding to the bond, before computing another bond/rotamer.
         graph.addEdge(rt.getBeginAtom().id,rt.getEndingAtom().id);
-        if(analize)
+        
+        #ifndef NDEBUG
+        if(analize) {
             printf("For Rotamer %d, the max distance computed is: %lf,\n with a first angle: %d \n",\
                 rt.getBond().getIdx(),total,max_first_half.angle);
-
+        }
+        #endif
     }
 
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
 
-    cout << "duration time[ms]: " << duration.count() << endl;
+    std::cout << "duration time[ms]: " << duration.count() << "\n";
+
 
     //printf("For molecule named %s \n", mol->getProp<std::string>("_Name") );
-    std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << std::endl;
+    std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << "\n";
 
     printf("The maximum distance computed is %lf\n", max_first_half.distance);
     
@@ -311,6 +313,9 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
  **/
 int main(int argc, char** argv){
 
+    if (argc < 2) {
+        return 1;
+    }
     std::string mol_file = argv[1];
     char* mol_number_string = argv[2];
     //std::vector<Rotamer> rotamers;
@@ -318,10 +323,6 @@ int main(int argc, char** argv){
     //RWMol *m = Mol2FileToMol( mol_file );
     //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,true,false,CORINA,false ) );
 
-    /**
-     * The following initialization works with the aspirin's mol2 file provided by the Professor.
-     * The declaration above works only with the file found online.
-     */
     //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,false,true,CORINA,false ) );
     /**The next Line read the molecule removing the H atoms, it reduce the number of possible rotors
      *  for the aspirin and it seems to work, but idk with others molecules, so for now I keep
@@ -336,7 +337,7 @@ int main(int argc, char** argv){
     std::vector<std::shared_ptr<RDKit::ROMol>> molecules;
     //readMoleculesStream(molFileStream, molecules);
     int mol_number = atoi(mol_number_string);
-    if(mol_number == 0){
+    if(mol_number == 1){
         singleMoleculeRead(molFileStream, molecules);
     }
     else{
@@ -351,8 +352,9 @@ int main(int argc, char** argv){
 
     auto total_start = std::chrono::high_resolution_clock::now();
 
-    std::cout << molecules.size() << std::endl;
-    
+    #ifndef NDEBUG 
+    std::cout << "molecules size " << molecules.size() << "\n";
+    #endif
     
     for(auto mol : molecules){
         analyzeMolecule(max_dist, mol);
@@ -362,10 +364,10 @@ int main(int argc, char** argv){
     auto final_stop = std::chrono::high_resolution_clock::now();
     auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(final_stop-total_start);
 
-    std::cout << "total duration of the computation[ms]: " << total_duration.count() << std::endl; 
+    std::cout << "total duration of the computation[ms]: " << total_duration.count() << "\n"; 
 
     printf("The overall maximum distance computed is %lf ", max_dist.distance);
-    std::cout  << " obtained from molecule " <<  max_dist.mol_name << std::endl;
+    std::cout  << " obtained from molecule " <<  max_dist.mol_name << "\n"; 
         
     printf("Computed with an angle of %d, around the rotamer %d\n",max_dist.angle,max_dist.rt.getBond().getIdx());
     

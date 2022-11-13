@@ -8,7 +8,6 @@
 #include "distance.h"
 #include "atom.cuh"
 
-using namespace std;
 
 inline cudaError_t checkCuda(cudaError_t result, int line )
 {
@@ -92,7 +91,7 @@ __global__ void compute_point_distance_non_matrix(double* res, atom_st* atoms, i
  * @param num_of_block numbre of block used in the rotation.
  **/
 
-double* distance_v3(vector<atom_st> atoms, int number_of_atoms, int num_of_block){
+double* distance_v3(std::vector<atom_st> atoms, int number_of_atoms, int num_of_block){
 
     cudaError_t err;
 
