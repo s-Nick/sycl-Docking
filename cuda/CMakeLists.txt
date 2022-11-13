@@ -15,6 +15,10 @@ find_package(Boost REQUIRED)
 set(CMAKE_PREFIX_PATH $ENV{RDBASE}/../)
 find_package(RDKit REQUIRED)
 
+if(NOT DEFINED CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
+endif()
+
 if(NOT DEFINED CMAKE_CUDA_STANDARD)
     set(CMAKE_CUDA_STANDARD 11)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
@@ -34,8 +38,8 @@ add_executable(main src/main.cu)
 
 target_link_libraries(main utils)
 
-set(CMAKE_INSTALL_PREFIX "/home/p4rs3c/Documents/projects/sycl-Docking/cuda/")
+set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR} CACHE STRING "" FORCE)
 install(TARGETS main
-        CONFIGURATIONS Release
+        CONFIGURATIONS ${CMAKE_BUILD_TYPE} 
         RUNTIME DESTINATION
         )
