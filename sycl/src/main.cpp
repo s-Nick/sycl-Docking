@@ -20,7 +20,11 @@
 
 #include"helper.h"
 
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/parsers.hpp>
+#include <boost/program_options/variables_map.hpp>
 
+namespace po = boost::program_options;
 
 #define NUM_OF_BLOCKS 360
 
@@ -44,14 +48,6 @@ class computeQuaternions;
 void computeUnitQuaternions(cl::sycl::double4* gpu_result, cl::sycl::double3  rt_vector, cl::sycl::queue& q_gpu){
 
     {
-        //cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
-        //cl::sycl::queue q_gpu(gpu);
-
-        //cl::sycl::double4 *gpu_result = 
-        //    cl::sycl::malloc_shared<cl::sycl::double4>(360*sizeof(cl::sycl::double4),q_gpu);
-
-        //Check if allocate enough memory
-        //cl::sycl::double3 gpu_rt_vector;
         cl::sycl::double3* gpu_rt_vector =
             cl::sycl::malloc_shared<cl::sycl::double3>(sizeof(cl::sycl::double3),q_gpu);
         
@@ -60,29 +56,15 @@ void computeUnitQuaternions(cl::sycl::double4* gpu_result, cl::sycl::double3  rt
         gpu_rt_vector->y() = rt_vector.y();
         gpu_rt_vector->z() = rt_vector.z();
         
-
-        /*
-        for(int i = 0; i < rt_vector.get_size(); i++){
-            gpu_rt_vector[i] = rt_vector[i];
-
-        }
-        */
         
         q_gpu.parallel_for<class computeQuaternions>(360, [=](cl::sycl::id<1> tid){
-            //cl::sycl::double3 norm;
-            double norm;
+
             double x, y, z;
             double angle;
             double sin_2, cos_2;
             
-            //TEMPORARY SOLUTION TO FIX MEMORY
-            //cl::sycl::double3 gpu_rt_vector = gpu_rt_vector_shared[0];
-            
-            double x_tmp_2, y_tmp_2, z_tmp_2;
-            norm = cl::sycl::length(cl::sycl::double3(gpu_rt_vector->x(),
+            double norm = cl::sycl::length(cl::sycl::double3(gpu_rt_vector->x(),
                                                 gpu_rt_vector->y(),gpu_rt_vector->z()));
-
-
 
             if(tid < 360){
                 x = gpu_rt_vector->x()/norm;
@@ -95,13 +77,7 @@ void computeUnitQuaternions(cl::sycl::double4* gpu_result, cl::sycl::double3  rt
             }
         }).wait();
         
-
-        //for(int i = 0; i < 360; i++){
-        //    results[i] = gpu_result[i];
-        //}
-
         cl::sycl::free(gpu_rt_vector,q_gpu);
-        //cl::sycl::free(gpu_result,q_gpu);
     }
     return;
 
@@ -115,9 +91,22 @@ void computeUnitQuaternions(cl::sycl::double4* gpu_result, cl::sycl::double3  rt
 int main(int argc, char **argv)
 {
 
-    std::string mol_file = argv[1];
-    char* mol_number_string = argv[2];
+    std::string mol_file;
+    bool multple_mol = false;
 
+    po::options_description d;
+
+    d.add_options()
+    ("mol2-file,f", po::value(&mol_file)->required(), "The file containing the molecules")
+    ("multpile molecules in files,n", po::value(&multple_mol)->required(), "if the molecule in the file is a single one o multiple")
+    ;
+
+    po::variables_map vm;
+    po::options_description app_description("Executable options");
+    app_description.add(d);
+    po::store(po::command_line_parser(argc, argv).options(app_description).run() ,vm);
+    po::notify(vm);
+    // */
     //SYCL error handler similar to checkCuda, but lambda fun
     auto exception_handler = [](cl::sycl::exception_list exceptions)
     {
@@ -137,8 +126,6 @@ int main(int argc, char **argv)
 
     std::vector<Rotamer> rotamers;
     std::vector<atom_st> atoms;
-    //RWMol *m = Mol2FileToMol( mol_file );
-    //std::shared_ptr<RDKit::ROMol>const  mol( RDKit::Mol2FileToMol( mol_file,true,false,CORINA,false ) );
 
     /**
      * The following initialization works with the aspirin's mol2 file provided by the Professor.
@@ -156,14 +143,14 @@ int main(int argc, char **argv)
 
     std::vector<std::shared_ptr<RDKit::ROMol>> molecules;
     //readMoleculesStream(molFileStream, molecules);
-    int mol_number = atoi(mol_number_string);
-    if(mol_number == 0){
+    // int mol_number = atoi(mol_number_string);
+    if(!multple_mol){
         singleMoleculeRead(molFileStream, molecules);
     }
     else{
         multipleMoleculeRead(molFileStream,molecules);
     }
-
+    std::cout << __LINE__ << std::endl;
     //Initialize the result storing structure.
     max_value max_dist;
     max_dist.distance = 0;
@@ -187,13 +174,13 @@ int main(int argc, char **argv)
             RDKit::MolOps::findSSSR(*mol);
         }
 
-        //for( unsigned int i = 0; i < mol->getNumBonds() ; i++ ) {
-        //    const RDKit::Bond *bond = mol->getBondWithIdx( i );
-        //}
-
         // Get all the Bond in the mol and add the valid ones to the rotamers' vector.
         // Since the Bond in rings and the Double bond are not considerated useful for
         // the rotation, it discards them.
+        auto conv_to_double3 = [](const RDGeom::Point3D& pos) {
+            return cl::sycl::double3(pos[0], pos[1], pos[2]);
+        };
+
         for (unsigned int i = 0; i < mol->getNumBonds(); i++)
         {
             const RDKit::Bond *bond = mol->getBondWithIdx(i);
@@ -203,42 +190,34 @@ int main(int argc, char **argv)
             graph.addEdge(startingAtom, endingAtom);
             if (mol->getRingInfo()->numBondRings(bond->getIdx()))
             {
-                //continue;
+                #ifndef NDEBUG
                 std::cout << "Bond " << bond->getIdx() << " is in a ring "
-                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << std::endl;
+                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << '\n';
+                #endif
+                continue;
             }
             else if (bond->getBondType() == RDKit::Bond::BondType::DOUBLE)
             {
-                //continue;
+                #ifndef NDEBUG
                 std::cout << "Bond " << bond->getIdx() << " is a DOUBLE bond "
-                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << std::endl;
+                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << '\n';
+                #endif
+                continue;
             }
             else
             {
-                unsigned int id = bond->getIdx();
-                atom_st beginAtom;
-                atom_st endAtom;
-                beginAtom.atom_id = startingAtom;
-                endAtom.atom_id = endingAtom;
-                auto tmp_pos = conf.getAtomPos(beginAtom.atom_id);
-                beginAtom.position = cl::sycl::double3{tmp_pos[0], tmp_pos[1], tmp_pos[2]};
-                tmp_pos = conf.getAtomPos(endAtom.atom_id);
-                endAtom.position = cl::sycl::double3{tmp_pos[0], tmp_pos[1], tmp_pos[2]};
-                Rotamer rt = Rotamer(*bond, id, beginAtom, endAtom);
-                rotamers.push_back(rt);
+                unsigned int id{bond->getIdx()};
+                atom_st beginAtom{startingAtom, conv_to_double3(conf.getAtomPos(startingAtom))};
+                atom_st endAtom{endingAtom, conv_to_double3(conf.getAtomPos(endingAtom))};
+                rotamers.push_back(Rotamer(*bond, id, beginAtom, endAtom));
             }
         }
 
         // Add all the atoms to the atoms' vector
         for (auto atom : mol->atoms())
         {
-            uint id = atom->getIdx();
-            auto pos_tmp = conf.getAtomPos(id);
-            cl::sycl::double3 pos = cl::sycl::double3{pos_tmp[0], pos_tmp[1], pos_tmp[2]};
-            atom_st at;
-            at.atom_id = id;
-            at.position = pos;
-            atoms.push_back(at);
+            const uint id = atom->getIdx();
+            atoms.push_back(atom_st{ id, conv_to_double3(conf.getAtomPos(id)) });
         }
 
         max_value max_first_half;
@@ -280,16 +259,16 @@ int main(int argc, char **argv)
             max_second_half.distance = 0;
             */
             Rotation r;
-
             // If the bond split, create one half with only one atom. The bond is not a rotamer,
             // so I don't rotate around it and skip the computation.
             if (atoms_first_half.size() > 1 && second_half.size() > 1){
 
                 analize = true;
+                #ifndef NDEBUG
                 std::cout << "Checking rotamer: " << rt.getBond().getIdx() << " ";
                 std::cout << "Starting Atom: " << rt.getBeginAtom().atom_id << " Ending Atom: " << rt.getEndingAtom().atom_id << " ";
-
-                std::cout << "number of atom in first half: " << atoms_first_half.size() << std::endl;
+                std::cout << "number of atom in first half: " << atoms_first_half.size() << '\n';
+                #endif
 
                 std::vector<atom_st> distance_to_compute;
                 
@@ -300,20 +279,11 @@ int main(int argc, char **argv)
                 cl::sycl::double4* unit_quaternions = cl::sycl::malloc_shared<cl::sycl::double4>(sizeof(cl::sycl::double4)*NUM_OF_BLOCKS, q_gpu);
 
                 computeUnitQuaternions(unit_quaternions, tmp_vector, q_gpu);
-                /*
-                //DEBUG PRINTING
-                for(int i = 0; i < NUM_OF_BLOCKS; i++){
-                    std::cout << " unit quaternion of rotation : " << i << std::endl;
-                    for (int c = 0; c < 4; c++){
-                        std::cout << unit_quaternions[i][c] << " ";
-                    }
-                    std::cout << std::endl;
-                }
-                */
+                // q_gpu.wait();
                 //cout << "UNIT QUATERNION TEST: " << unit_quaternions[0][0] << " " <<__LINE__ << endl;
-
+                
                 double max = 0;
-                double *res;
+                double *res = nullptr;
 
                 for (int c = 0; c < 360; c += NUM_OF_BLOCKS){
 
@@ -324,12 +294,11 @@ int main(int argc, char **argv)
                     // Compute the rotation and storing the result
                     rot_first_half = r.rotate(c, atoms_first_half, tmp, unit_quaternions, q_gpu);
                     
-                    
                     // Add all the element of the vector of vectors in a single vector with all the atoms.
                     // The atoms are in order of angle of rotation and every time is added the missing atoms
                     // of the second half of the molecule, in order to compute the internal distance.
                     
-                    for (int rotation = 0; rotation < NUM_OF_BLOCKS; rotation++){
+                    for (int rotation = 0; rotation < NUM_OF_BLOCKS; ++rotation){
                         //cout << "main line " << __LINE__ << endl;
                         for (int i = 0; i < atoms_first_half.size(); i++){
                             distance_to_compute.push_back(rot_first_half[rotation][i]);
@@ -343,7 +312,7 @@ int main(int argc, char **argv)
                     // Compute the internal distance, storing the result in res.
                     res = distance(distance_to_compute, atoms.size(), NUM_OF_BLOCKS, q_gpu);
 
-                    
+                    // q_gpu.wait();
 
                     for (int i = 0; i < NUM_OF_BLOCKS; i++){
                         if (res[i] > max_first_half.distance){
@@ -362,26 +331,21 @@ int main(int argc, char **argv)
                     
 
                 }
+                #ifndef NDEBUG
                 printf("Computed distance for the first part,\n");
                 printf("the max distance compute is %lf with angle %d around rotamer: %d\n",
                     max_first_half.distance, max_first_half.angle, max_first_half.rt.getBond().getIdx());
-
+                #endif
                 cl::sycl::free(unit_quaternions,q_gpu);
                 //std::free(unit_quaternions);
                 std::free(res);
-                /*
-                {//SYCL buffer scope for unit_quaternions
-
-                    cl::sycl::buffer<cl::sycl::double4, 1> buf_unit_quaternion(unit_quaternions,cl::sycl::range<1>(1));
-
-                
-                }// end scope unit_quaternion buffer
-                */
             }
             else{
                 analize = false;
+                #ifndef NDEBUG
                 printf("Checking rotamer %d ... ", rt.getBond().getIdx());
                 printf("Too few atoms in the partition, rotamer not analized\n");
+                #endif
             }
             
             double total = max_first_half.distance; //+ max_second_half.distance;
@@ -400,20 +364,21 @@ int main(int argc, char **argv)
 
             // Adding again the edge corresponding to the bond, before computing another bond/rotamer.
             graph.addEdge(rt.getBeginAtom().atom_id, rt.getEndingAtom().atom_id);
-            
+
+            #ifndef NDEBUG 
             if (analize)
                 printf("For Rotamer %d, the max distance computed is: %lf,\n with a first angle: %d \n",
                     rt.getBond().getIdx(), total, max_first_half.angle);
-            
+            #endif 
         }
     
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-        std::cout << "duration time[ms]: " << duration.count() << std::endl;
-
-        std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << std::endl;
-
+        #ifndef NDEBUG
+        std::cout << "duration time[ms]: " << duration.count() << '\n';
+        std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << '\n';
+        #endif
         printf("The maximum distance computed is %lf\n", max_first_half.distance);
 
         printf("Computed with an angle of %d, around the rotamer %d\n", 
