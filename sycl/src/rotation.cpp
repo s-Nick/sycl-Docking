@@ -58,21 +58,11 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
 
     atom_st* atoms = cl::sycl::malloc_shared<atom_st>(size_of_atoms,q_gpu);
 
-    //atom_st *h_res = cl::sycl::malloc_host<atom_st>(size_of_atoms * NUM_OF_BLOCKS*number_of_atoms, q_gpu);
-    //atom_st *d_res = cl::sycl::malloc_device<atom_st>(size_of_atoms * NUM_OF_BLOCKS*number_of_atoms, q_gpu);
 
     atom_st *res = cl::sycl::malloc_shared<atom_st>(size_of_atoms * NUM_OF_BLOCKS*number_of_atoms, q_gpu);
 
     //cl::sycl::double4* d_unit_quaternion = cl::sycl::malloc_shared<cl::sycl::double4>(sizeof(cl::sycl::double4)*NUM_OF_BLOCKS, q_gpu);
-    /*
-    //initialize d_unit_quaternion
-    for(int c = 0; c < NUM_OF_BLOCKS; c++){
-        for(int i = 0; i < 4 ; i++){
-            d_unit_quaternion[c][i] = unit_quaternion[c][i];
-        }
-    }
-    */
-    //q_gpu.memcpy(d_unit_quaternion, unit_quaternion, sizeof(unit_quaternion) );
+   
     
 
     //initialize vector of atoms
@@ -89,31 +79,9 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
     passingPoint->y() = pp.y();
     passingPoint->z() = pp.z();
 
-    /*for(int i = 0; i < 3 ;i++){
-        passingPoint[i] = pp[i];
-    }*/
-    
-    //q_gpu.memcpy(passingPoint,&pp,sizeof(cl::sycl::double3));
-    //q_gpu.wait();
+    q_gpu.wait();
     {//SYCL buffer scope
 
-        
-        
-        //std::cout << "rotation line " << __LINE__ << std::endl;
-
-        //auto translation_s = q_gpu.submit([&] (cl::sycl::handler& h) {
-            
-            //cl::sycl::stream out(2048, 256, q_gpu);
-            
-            //std::cout << "rotation line " << __LINE__ << std::endl;
-
-            //cl::sycl::range<1> num_groups{NUM_OF_BLOCKS};
-            //std::cout << "rotation line " << __LINE__ << std::endl;
-            //cl::sycl::range<1> group_size{64};
-            //std::cout << "rotation line " << __LINE__ << std::endl;
-
-            
-            //cl::sycl::range<1> translation_thread_number{64};
 
             q_gpu.parallel_for<class translation>(cl::sycl::nd_range<1>(128,128),
                                              [=](cl::sycl::nd_item<1>it){           
@@ -136,7 +104,7 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         //q_gpu.wait();
         //std::cout << "rotation line " << __LINE__ << std::endl;
         //translation_s.wait();
-        
+        q_gpu.wait_and_throw();
         /*
         try{
             q_gpu.wait_and_throw();
@@ -243,7 +211,6 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
     std::vector<atom_st> tmp;
 
     //std::cout << "rotation line " << __LINE__ << std::endl;
-
     //copy the results in order to free the memory and to pass the result to other functions for further usage
     for (int i = 0; i < NUM_OF_BLOCKS; i++){
         for (int c = atoms_st.size() * i; c < atoms_st.size() * (i + 1); c++){
@@ -253,12 +220,11 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         result_to_return.push_back(tmp);
         tmp.clear();
     }
-       
     //std::cout << "rotation line " << __LINE__ << std::endl;
     
     
     //DEBUG PRINTING
-    /*
+    #ifndef NDEBUG
     for(int i = 0; i < NUM_OF_BLOCKS; i++){
         std::cout << "angle of rotation : " << i << std::endl;
         for (int c = 0; c < result_to_return[i].size(); c++){
@@ -268,7 +234,7 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
             std::cout << result_to_return[i][c].position.z() << std::endl;
         }
     }
-    */
+    #endif
 
     //free memory allocated using sycl::malloc
     cl::sycl::free(passingPoint,q_gpu);

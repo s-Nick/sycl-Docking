@@ -83,7 +83,7 @@ void singleMoleculeRead(std::ifstream& molFileStream,
             molStream.close();
             std::fstream molStream;
             molStream.open("tmpdata.mol2", std::ios::in);
-            //std::cout << molStream.rdbuf() << std::endl;
+            // std::cout << molStream.rdbuf() << std::endl;
             std::shared_ptr<RDKit::ROMol> const mol(RDKit::Mol2DataStreamToMol(molStream, false,true, RDKit::CORINA, false));
             molecules.push_back(mol);
             if(line == "\0")
@@ -99,8 +99,9 @@ void singleMoleculeRead(std::ifstream& molFileStream,
     //auto tmp = molecules[3]->getProp<std::string>("_Name");
     //auto s = mol->getProp<std::string>("_Name");
     auto tmp = molecules.size();
+    #ifndef NDEBUG
     std::cout << tmp << std::endl;
-
+    #endif
 
     return;
 }
