@@ -1,5 +1,6 @@
 # PROJECT NAME(placeholder)
-##
+
+## INSTRUCTIONS DEPRECATED
 
 ### Used Libraries
 
@@ -95,7 +96,7 @@ In order to use it is necessary to have the Libraries and set the path to the rd
 
 In case the driver and cuda version used are older than "Pascal" architecture and cuda 8  will be necessary to change also the architecture set at compile time.
 
-### How to use it
+### How to use it (deprecated)
 
 Example of the command for running the code:
 ```shellsession
