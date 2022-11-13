@@ -136,7 +136,7 @@ std::vector<std::vector<atom_st>> Rotation::rotate(int angle, std::vector<atom_s
         //q_gpu.wait();
         //std::cout << "rotation line " << __LINE__ << std::endl;
         //translation_s.wait();
-        
+        q_gpu.wait_and_throw();
         /*
         try{
             q_gpu.wait_and_throw();

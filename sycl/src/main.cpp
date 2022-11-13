@@ -24,8 +24,6 @@
 
 #define NUM_OF_BLOCKS 360
 
-using namespace std;
-
 /**
  * Struct used to keep track of the max result found.
  * It keeps track of the distance, the angle and the rotamer. From old version and for future expansions,
@@ -90,7 +88,7 @@ void computeUnitQuaternions(cl::sycl::double4* gpu_result, cl::sycl::double3  rt
                 x = gpu_rt_vector->x()/norm;
                 y = gpu_rt_vector->y()/norm;
                 z = gpu_rt_vector->z()/norm;
-                angle = M_PI/180 * tid;
+                angle = M_PI/180 * tid.get(0);
                 sin_2 = cl::sycl::sin(angle/2);
                 cos_2 = cl::sycl::cos(angle/2);
                 gpu_result[tid] = cl::sycl::double4{x*sin_2 , y*sin_2, z*sin_2, cos_2};
@@ -174,7 +172,7 @@ int main(int argc, char **argv)
 
     //Create the queue for the device in order to have the same context
     cl::sycl::device gpu = cl::sycl::gpu_selector{}.select_device();
-    cl::sycl::queue q_gpu(gpu,exception_handler);
+    cl::sycl::queue q_gpu(gpu,exception_handler, cl::sycl::property::queue::in_order());
 
     for(auto mol : molecules){
         // Initialize the graph.
@@ -207,13 +205,13 @@ int main(int argc, char **argv)
             {
                 //continue;
                 std::cout << "Bond " << bond->getIdx() << " is in a ring "
-                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << endl;
+                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << std::endl;
             }
             else if (bond->getBondType() == RDKit::Bond::BondType::DOUBLE)
             {
                 //continue;
                 std::cout << "Bond " << bond->getIdx() << " is a DOUBLE bond "
-                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << endl;
+                        << "stAtom: " << startingAtom << " endAtom: " << endingAtom << std::endl;
             }
             else
             {
@@ -249,8 +247,8 @@ int main(int argc, char **argv)
         max_second_half.distance = 0;
             
 
-        vector<unsigned int> first_half;
-        vector<unsigned int> second_half;
+        std::vector<unsigned int> first_half;
+        std::vector<unsigned int> second_half;
         //Rotamer rt = rotamers[0];
         //vector<Rotamer> tmp_rotamers ={rotamers[0], rotamers[1]};
         auto start = std::chrono::high_resolution_clock::now();
@@ -266,8 +264,8 @@ int main(int argc, char **argv)
             graph.DFSlinkedNode(rt.getBeginAtom().atom_id, first_half);
             graph.DFSlinkedNode(rt.getEndingAtom().atom_id, second_half);
 
-            vector<atom_st> atoms_first_half;
-            vector<atom_st> atoms_second_half;
+            std::vector<atom_st> atoms_first_half;
+            std::vector<atom_st> atoms_second_half;
 
             for (auto i : first_half)
                 atoms_first_half.push_back(atoms[i]);
@@ -291,9 +289,9 @@ int main(int argc, char **argv)
                 std::cout << "Checking rotamer: " << rt.getBond().getIdx() << " ";
                 std::cout << "Starting Atom: " << rt.getBeginAtom().atom_id << " Ending Atom: " << rt.getEndingAtom().atom_id << " ";
 
-                std::cout << "number of atom in first half: " << atoms_first_half.size() << endl;
+                std::cout << "number of atom in first half: " << atoms_first_half.size() << std::endl;
 
-                vector<atom_st> distance_to_compute;
+                std::vector<atom_st> distance_to_compute;
                 
                 cl::sycl::double3 tmp_vector = rt.getVector();
                 
@@ -319,7 +317,7 @@ int main(int argc, char **argv)
 
                 for (int c = 0; c < 360; c += NUM_OF_BLOCKS){
 
-                    vector<vector<atom_st>> rot_first_half;
+                    std::vector<std::vector<atom_st>> rot_first_half;
 
                     cl::sycl::double3 tmp = rt.getBeginAtom().position;
 
@@ -412,7 +410,7 @@ int main(int argc, char **argv)
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-        std::cout << "duration time[ms]: " << duration.count() << endl;
+        std::cout << "duration time[ms]: " << duration.count() << std::endl;
 
         std::cout << "For molecule named " << mol->getProp<std::string>("_Name") << std::endl;
 
