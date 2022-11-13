@@ -204,7 +204,7 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
     checkCuda( cudaMemPrefetchAsync(unit_quaternion,360*sizeof(double4), deviceId) ,__LINE__);
     checkCuda( cudaMemPrefetchAsync(atoms,size_of_atoms,deviceId), __LINE__);
     
-    rotation_kernel_v5<<<NUM_OF_BLOCKS,64,0>>>(d_res,atoms,number_of_atoms,passingPoint,unit_quaternion,angle);
+    rotation_kernel_v5<<<NUM_OF_BLOCKS,128,0>>>(d_res,atoms,number_of_atoms,passingPoint,unit_quaternion,angle);
 
     err = cudaGetLastError();
     if(err != cudaSuccess){
@@ -228,6 +228,18 @@ vector<vector<atom_st>> Rotation::rotate_v5(int angle, std::vector<atom_st>& ato
         result_to_return.push_back(tmp);
         tmp.clear();
     }
+    //DEBUG PRINTING
+    #ifndef NDEBUG
+    for(int i = 0; i < NUM_OF_BLOCKS; i++){
+        std::cout << "angle of rotation : " << i << std::endl;
+        for (int c = 0; c < result_to_return[i].size(); c++){
+            std::cout << result_to_return[i][c].id << " ";
+            std::cout << result_to_return[i][c].position.x << " ";
+            std::cout << result_to_return[i][c].position.y << " ";
+            std::cout << result_to_return[i][c].position.z << std::endl;
+        }
+    }
+    #endif
     tmp.clear();
     std::vector<atom_st>().swap(tmp);
 

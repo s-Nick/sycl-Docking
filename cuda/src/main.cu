@@ -202,7 +202,7 @@ void analyzeMolecule(max_value& max_dist, std::shared_ptr<RDKit::ROMol> mol){
             compute_unit_quaternions<<<1,360>>>(unit_quaternions,tmp_vector);
 
             cudaDeviceSynchronize();
-
+            
             double max = 0;
             double* res = nullptr;
             
