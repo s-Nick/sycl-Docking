@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.18)
 
 project("sycl-Docking" LANGUAGES CXX)
 
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED COMPONENTS program_options)
 set(CMAKE_PREFIX_PATH $ENV{RDBASE}/../)
 find_package(RDKit REQUIRED)
 
@@ -15,11 +15,12 @@ target_include_directories(utils PUBLIC $ENV{DPCPP_HOME}/../include/
                                         $ENV{RDBASE}/External
                                         $ENV{BOOST_ROOT}/include
                         )
-link_directories($ENV{RDBASE}/lib $ENV{BOOST_ROOT}/lib $ENV:{DPCPP_HOME}/../install/lib )
-target_link_libraries(utils -lRDKitChemReactions -lRDKitFileParsers -lRDKitSmilesParse -lRDKitDepictor  -lRDKitSubstructMatch -lRDKitGraphMol -lRDKitDataStructs -lRDKitRDGeometryLib -lRDKitRDGeneral)
+link_directories($ENV{RDBASE}/lib $ENV{BOOST_ROOT}/lib $ENV{DPCPP_HOME}/../install/lib )
+target_link_libraries(utils -lRDKitChemReactions -lRDKitFileParsers -lRDKitSmilesParse -lRDKitDepictor  -lRDKitSubstructMatch -lRDKitGraphMol -lRDKitDataStructs -lRDKitRDGeometryLib -lRDKitRDGeneral ${Boost_LIBRARIES})
+#target_link_libraries(utils PRIVATE ${Boost_LIBRARIES})
 add_executable(main src/main.cpp)
 
-target_link_libraries(main utils)
+target_link_libraries(main utils Boost::program_options)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR} CACHE STRING "" FORCE)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
